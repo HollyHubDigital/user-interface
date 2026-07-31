@@ -103,31 +103,58 @@ function renderFiles(files) {
 }
 
 async function enroll() {
+  const isAndroid = /android/i.test(navigator.userAgent);
+  const isIos = /iphone|ipad|ipod/i.test(navigator.userAgent) || (/macintosh/i.test(navigator.userAgent) && navigator.maxTouchPoints > 1);
+  const platform = isAndroid ? "android" : "ios";
   const details = {
-    platform: /android/i.test(navigator.userAgent) ? "android" : "ios",
-    name: "User Android Device",
+    platform,
+    name: isIos ? "User iPhone Device" : "User Android Device",
     serial: `WEB-${Date.now()}`,
     ownerConsent: true,
-    capabilities: { browserEnrollment: true },
+    capabilities: { browserEnrollment: true, mdmProfile: isIos },
     info: { userAgent: navigator.userAgent }
   };
   const enrollment = await api("/api/user/enroll-browser", { method: "POST", body: JSON.stringify(details) });
-  const params = new URLSearchParams({ serverUrl: API_BASE || location.origin, deviceId: enrollment.deviceId, token: enrollment.token });
   const link = document.createElement("a");
-  link.href = apiUrl("/api/enrollment/android-agent");
-  link.download = "cp-device-agent.apk";
+  if (isIos) {
+    link.href = apiUrl("/api/enrollment/ios-profile");
+    link.download = "cp-device-enrollment.mobileconfig";
+  } else {
+    const params = new URLSearchParams({ serverUrl: API_BASE || location.origin, deviceId: enrollment.deviceId, token: enrollment.token });
+    link.href = apiUrl("/api/enrollment/android-agent");
+    link.download = "cp-device-agent.apk";
+    setTimeout(() => { location.href = `cpdevice://enroll?${params}`; }, 2500);
+  }
   document.body.appendChild(link);
   link.click();
   link.remove();
-  setTimeout(() => { location.href = `cpdevice://enroll?${params}`; }, 2500);
 }
 
 $("enrollUser").onclick = enroll;
 
+function commandTypeForSelected(type) {
+  if (!selected || selected.platform !== "ios") return type;
+  if (type === "screen.control.request") return "screen.share.request";
+  return type;
+}
+
+function unsupportedIosFeature(type) {
+  return selected && selected.platform === "ios" && ["file.list", "mobile.data.on"].includes(type);
+}
+
+function livePreviewUnavailable() {
+  return selected && selected.platform === "ios";
+}
+
 async function command(type, payload = {}) {
   if (!selected) return alert("Select device first");
+  const actualType = commandTypeForSelected(type);
+  if (unsupportedIosFeature(type)) {
+    alert("This iPhone feature is not available through public Apple MDM APIs. iPhone enrollment supports profile enrollment, app/MDM commands, device lock, supervised Lost Mode location where configured, and screen-share request workflows.");
+    return null;
+  }
   try {
-    return await api("/api/user/commands", { method: "POST", body: JSON.stringify({ deviceIds: [selected.id], type, payload }) });
+    return await api("/api/user/commands", { method: "POST", body: JSON.stringify({ deviceIds: [selected.id], type: actualType, payload }) });
   } catch (error) {
     if (error.subscriptionRequired) return openSubscriptionPage();
     throw error;
@@ -137,9 +164,11 @@ async function command(type, payload = {}) {
 document.querySelectorAll("[data-feature]").forEach((button) => {
   button.onclick = async () => {
     const type = button.dataset.feature;
-    if (type !== "screen.control.request" && !hasPaidAccess()) return openSubscriptionPage();
-    await command(type, { path: "/sdcard", requestedAt: new Date().toISOString() });
-    if (type === "screen.control.request") openLive();
+    if (!["screen.control.request", "screen.share.request"].includes(commandTypeForSelected(type)) && !hasPaidAccess()) return openSubscriptionPage();
+    const result = await command(type, { path: "/sdcard", requestedAt: new Date().toISOString() });
+    if (!result) return;
+    if (type === "screen.control.request" && !livePreviewUnavailable()) openLive();
+    if (type === "screen.control.request" && livePreviewUnavailable()) alert("iPhone screen viewing uses Apple-approved screen-share/MDM workflows. The request was queued; live remote control like Android is not available from a web profile alone.");
   };
 });
 
