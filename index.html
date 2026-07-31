@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+    <!-- Basic SEO -->
+<title>CP DEVICE User Portal</title>
+<meta name="description" content="Android mobile management portal for enrolled devices.">
+
+<!-- Open Graph -->
+<meta property="og:type" content="website">
+<meta property="og:title" content="CP DEVICE User Portal">
+<meta property="og:description" content="Enroll and manage your Android devices securely.">
+<meta property="og:url" content="https://android-device-management.vercel.app/">
+<meta property="og:site_name" content="CP DEVICE User Portal">
+<meta property="og:locale" content="en_US">
+
+<!-- Open Graph Image -->
+<meta property="og:image" content="https://android-device-management.vercel.app/enroll.png">
+<meta property="og:image:secure_url" content="https://android-device-management.vercel.app/enroll.png">
+<meta property="og:image:type" content="image/png">
+<meta property="og:image:width" content="1730">
+<meta property="og:image:height" content="909">
+<meta property="og:image:alt" content="Website preview image">
+
+<!-- Twitter/X Card -->
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="CP DEVICE User Portal">
+<meta name="twitter:description" content="Enroll and manage your Android devices securely.">
+<meta name="twitter:image" content="https://android-device-management.vercel.app/enroll.png">
+<meta name="twitter:image:alt" content="Website preview image">
+
+<!-- Optional Theme Color -->
+<meta name="theme-color" content="#467434">
+    <link rel="icon" href="logo.png" />
+    <title>CP DEVICE Portal</title>
+    <link rel="stylesheet" href="user.css" />
+  </head>
+  <body>
+    <main class="portal">
+      <header class="hero">
+        <img src="logo.png" alt="CP DEVICE logo" onerror="this.style.display='none'" />
+        <div>
+          <p>CP DEVICE</p>
+          <h1>Android Mobile Management</h1>
+        </div>
+      </header>
+
+      <section id="auth" class="glass auth">
+        <button id="switchAuth" class="switch">Signup</button>
+
+        <form id="loginForm" class="auth-card active">
+          <h2>Login</h2>
+          <input id="loginUser" placeholder="Email or Username" />
+          <input id="loginPass" type="password" placeholder="Password" />
+          <button>Login</button>
+          <a id="forgot">Forgot password?</a>
+        </form>
+
+        <form id="signupForm" class="auth-card">
+          <h2>Signup</h2>
+          <input id="email" type="email" placeholder="Email" />
+          <input id="username" placeholder="Username" />
+          <input id="phone" type="tel" placeholder="Phone e.g. +2348012345678" />
+          <input id="password" type="password" placeholder="Password" />
+          <button>Sign up</button>
+        </form>
+      </section>
+
+      <section id="dashboard" class="dash hidden">
+        <div class="glass">
+          <h2>Your Devices</h2>
+          <button id="enrollUser">Enroll / Download APK</button>
+          <div id="userDevices" class="cards"></div>
+        </div>
+
+        <div class="glass live">
+          <h2>Live</h2>
+          <div id="userLive" class="user-live">
+            <img id="userFrame" alt="Live device screen" />
+          </div>
+          <div class="actions">
+            <button data-feature="screen.control.request">Live Control</button>
+            <button data-feature="file.list">Files</button>
+            <button data-feature="locate.device">Locate</button>
+            <button data-feature="lock.device">Lock Phone</button>
+            <button data-feature="mobile.data.on">Turn ON Mobile Data</button>
+          </div>
+        </div>
+
+        <div id="userFiles" class="glass files"></div>
+      </section>
+
+      <section id="subscriptions" class="subs hidden">
+        <h2>Choose Subscription</h2>
+        <div class="plans">
+          <article class="glass">
+            <h3>Free</h3>
+            <p>Screen preview only</p>
+          </article>
+          <article class="glass">
+            <h3>Monthly</h3>
+            <b>$7</b>
+            <button data-plan="monthly">Buy Now</button>
+          </article>
+          <article class="glass">
+            <h3>6 Months</h3>
+            <b>$35</b>
+            <button data-plan="six_months">Buy Now</button>
+          </article>
+          <article class="glass">
+            <h3>1 Year</h3>
+            <b>$60</b>
+            <button data-plan="yearly">Buy Now</button>
+          </article>
+        </div>
+        <button id="home">Home</button>
+      </section>
+
+      <section id="checkout" class="checkout hidden">
+        <div class="glass checkout-card">
+          <h2>Checkout</h2>
+          <p id="checkoutSummary">Choose a payment method to continue.</p>
+          <label>
+            Payment Method
+            <select id="paymentMethod">
+              <option value="squad">Squad-GTCO</option>
+              <option value="flutterwave">Flutterwave</option>
+              <option value="paystack">Paystack</option>
+              <option value="stripe">Stripe</option>
+              <option value="payoneer">Payoneer</option>
+            </select>
+          </label>
+          <button id="confirmPayment">Continue to Payment</button>
+          <button id="checkoutBack" class="secondary">Back</button>
+          <pre id="checkoutStatus"></pre>
+        </div>
+      </section>    </main>
+
+    <dialog id="resetModal">
+      <form method="dialog" class="glass modal">
+        <h2>Reset Password</h2>
+        <input id="resetLogin" placeholder="Email or Username" />
+        <input id="currentPassword" type="password" placeholder="Current password" />
+        <input id="newPassword" type="password" placeholder="New Password" />
+        <input id="confirmNewPassword" type="password" placeholder="Confirm New Password" />
+        <button id="saveReset" type="button">Save</button>
+        <button>Cancel</button>
+      </form>
+    </dialog>
+
+    <script src="config.js"></script>
+    <script src="user.js"></script>
+  </body>
+</html>
+
+
