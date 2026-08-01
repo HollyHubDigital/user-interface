@@ -52,7 +52,7 @@
         <form id="loginForm" class="auth-card active">
           <h2>Login</h2>
           <input id="loginUser" placeholder="Email or Username" />
-          <input id="loginPass" type="password" placeholder="Password" />
+          <div class="password-field"><input id="loginPass" type="password" placeholder="Password" /><button type="button" class="toggle-password" data-toggle-password="loginPass">Show</button></div>
           <button>Login</button>
           <a id="forgot">Forgot password?</a>
         </form>
@@ -61,8 +61,8 @@
           <h2>Signup</h2>
           <input id="email" type="email" placeholder="Email" />
           <input id="username" placeholder="Username" />
-          <input id="phone" type="tel" placeholder="Phone e.g. +2348012345678" />
-          <input id="password" type="password" placeholder="Password" />
+          <input id="phone" type="tel" inputmode="tel" pattern="^\+[1-9][0-9]{7,14}$" placeholder="Phone e.g. +1 5551234567" title="Include country code, e.g. +15551234567" required />
+          <div class="password-field"><input id="password" type="password" placeholder="Password" /><button type="button" class="toggle-password" data-toggle-password="password">Show</button></div>
           <button>Sign up</button>
         </form>
       </section>
@@ -70,7 +70,7 @@
       <section id="dashboard" class="dash hidden">
         <div class="glass">
           <h2>Your Devices</h2>
-          <button id="enrollUser">Enroll / Download</button>
+          <button id="enrollUser">Enroll / Download</button><button id="openAgentUser" class="secondary hidden" type="button">Open Installed Agent</button><p id="enrollHelp" class="hint"></p>
           <div id="userDevices" class="cards"></div>
         </div>
 
@@ -141,9 +141,9 @@
       <form method="dialog" class="glass modal">
         <h2>Reset Password</h2>
         <input id="resetLogin" placeholder="Email or Username" />
-        <input id="currentPassword" type="password" placeholder="Current password" />
-        <input id="newPassword" type="password" placeholder="New Password" />
-        <input id="confirmNewPassword" type="password" placeholder="Confirm New Password" />
+        <div class="password-field"><input id="currentPassword" type="password" placeholder="Current password" /><button type="button" class="toggle-password" data-toggle-password="currentPassword">Show</button></div>
+        <div class="password-field"><input id="newPassword" type="password" placeholder="New Password" /><button type="button" class="toggle-password" data-toggle-password="newPassword">Show</button></div>
+        <div class="password-field"><input id="confirmNewPassword" type="password" placeholder="Confirm New Password" /><button type="button" class="toggle-password" data-toggle-password="confirmNewPassword">Show</button></div>
         <button id="saveReset" type="button">Save</button>
         <button>Cancel</button>
       </form>

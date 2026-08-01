@@ -2,6 +2,7 @@ let token = "";
 let me = null;
 let selected = null;
 let ws = null;
+let pendingEnrollmentLink = localStorage.cpPendingEnrollmentLink || "";
 
 const API_BASE = (window.CP_DEVICE_CONFIG && window.CP_DEVICE_CONFIG.API_BASE_URL) || "";
 const $ = (id) => document.getElementById(id);
@@ -34,6 +35,12 @@ function show(sectionId) {
   ["auth", "dashboard", "subscriptions", "checkout"].forEach((id) => $(id).classList.toggle("hidden", id !== sectionId));
 }
 
+function refreshEnrollmentHandoff() {
+  if (!$("openAgentUser")) return;
+  const hasLink = Boolean(pendingEnrollmentLink);
+  $("openAgentUser").classList.toggle("hidden", !hasLink);
+  $("enrollHelp").textContent = hasLink ? "After installing the APK, tap Open Installed Agent to auto-fill Device ID and Token." : "";
+}
 function hasPaidAccess() {
   return me && me.subscription && me.subscription.plan !== "free" && Date.parse(me.subscription.expiresAt) > Date.now();
 }
@@ -54,32 +61,48 @@ $("switchAuth").onclick = () => {
 
 $("signupForm").onsubmit = async (event) => {
   event.preventDefault();
-  await api("/api/auth/signup", {
-    method: "POST",
-    body: JSON.stringify({ email: email.value, username: username.value, phone: phone.value, password: password.value })
-  });
-  $("switchAuth").click();
+  const normalizedPhone = phone.value.replace(/\s+/g, "");
+  if (!/^\+[1-9]\d{7,14}$/.test(normalizedPhone)) return alert("Phone number must include country code, e.g. +15551234567");
+  try {
+    await api("/api/auth/signup", {
+      method: "POST",
+      body: JSON.stringify({ email: email.value, username: username.value, phone: normalizedPhone, password: password.value })
+    });
+    alert("Signup successful. Please login.");
+    $("switchAuth").click();
+  } catch (error) {
+    alert(error.message || "Signup failed");
+  }
 };
 
 $("loginForm").onsubmit = async (event) => {
   event.preventDefault();
-  const response = await api("/api/auth/login", {
-    method: "POST",
-    body: JSON.stringify({ login: loginUser.value, password: loginPass.value })
-  });
-  token = response.token;
-  me = response.user;
-  sessionStorage.cpUserToken = token;
-  await loadDashboard();
+  try {
+    const response = await api("/api/auth/login", {
+      method: "POST",
+      body: JSON.stringify({ login: loginUser.value, password: loginPass.value })
+    });
+    token = response.token;
+    me = response.user;
+    localStorage.cpUserToken = token;
+    await loadDashboard();
+  } catch {
+    alert("Email/Username or Password is not valid");
+  }
 };
 
 $("forgot").onclick = () => resetModal.showModal();
 $("saveReset").onclick = async () => {
-  await api("/api/auth/reset-password", {
-    method: "POST",
-    body: JSON.stringify({ login: resetLogin.value, currentPassword: currentPassword.value, newPassword: newPassword.value, confirmNewPassword: confirmNewPassword.value })
-  });
-  resetModal.close();
+  try {
+    await api("/api/auth/reset-password", {
+      method: "POST",
+      body: JSON.stringify({ login: resetLogin.value, currentPassword: currentPassword.value, newPassword: newPassword.value, confirmNewPassword: confirmNewPassword.value })
+    });
+    alert("Password updated. Please login with your new password.");
+    resetModal.close();
+  } catch (error) {
+    alert(error.message || "Password reset failed");
+  }
 };
 
 async function loadDashboard() {
@@ -155,16 +178,25 @@ async function enroll() {
     link.download = "cp-device-enrollment.mobileconfig";
   } else {
     const params = new URLSearchParams({ serverUrl: API_BASE || location.origin, deviceId: enrollment.deviceId, token: enrollment.token });
+    pendingEnrollmentLink = `cpdevice://enroll?${params}`;
+    localStorage.cpPendingEnrollmentLink = pendingEnrollmentLink;
+    refreshEnrollmentHandoff();
     link.href = apiUrl("/api/enrollment/android-agent");
     link.download = "cp-device-agent.apk";
-    setTimeout(() => { location.href = `cpdevice://enroll?${params}`; }, 2500);
+    alert("APK download started. After installation, return here and tap Open Installed Agent to auto-fill Device ID and Token.");
+    setTimeout(() => { location.href = pendingEnrollmentLink; }, 2500);
   }
   document.body.appendChild(link);
   link.click();
   link.remove();
 }
 
-$("enrollUser").onclick = enroll;
+$("enrollUser").onclick = () => enroll().catch((error) => alert(error.message || "Enrollment failed"));
+$("openAgentUser").onclick = () => {
+  if (!pendingEnrollmentLink) return alert("Tap Enroll / Download first.");
+  location.href = pendingEnrollmentLink;
+};
+refreshEnrollmentHandoff();
 
 function commandTypeForSelected(type) {
   if (!selected || selected.platform !== "ios") return type;
@@ -197,12 +229,16 @@ async function command(type, payload = {}) {
 
 document.querySelectorAll("[data-feature]").forEach((button) => {
   button.onclick = async () => {
-    const type = button.dataset.feature;
-    if (!["screen.control.request", "screen.share.request"].includes(commandTypeForSelected(type)) && !hasPaidAccess()) return openSubscriptionPage();
-    const result = await command(type, { path: "/sdcard", requestedAt: new Date().toISOString() });
-    if (!result) return;
-    if (type === "screen.control.request" && !livePreviewUnavailable()) openLive();
-    if (type === "screen.control.request" && livePreviewUnavailable()) alert("iPhone screen viewing uses Apple-approved screen-share/MDM workflows. The request was queued; live remote control like Android is not available from a web profile alone.");
+    try {
+      const type = button.dataset.feature;
+      if (!["screen.control.request", "screen.share.request"].includes(commandTypeForSelected(type)) && !hasPaidAccess()) return openSubscriptionPage();
+      const result = await command(type, { path: "/sdcard", requestedAt: new Date().toISOString() });
+      if (!result) return;
+      if (type === "screen.control.request" && !livePreviewUnavailable()) openLive();
+      if (type === "screen.control.request" && livePreviewUnavailable()) alert("iPhone screen viewing uses Apple-approved screen-share/MDM workflows. The request was queued; live remote control like Android is not available from a web profile alone.");
+    } catch (error) {
+      alert(error.message || "Command failed");
+    }
   };
 });
 
@@ -253,9 +289,19 @@ document.querySelectorAll("[data-plan]").forEach((button) => {
 });
 
 home.onclick = () => show("dashboard");
-token = sessionStorage.cpUserToken || "";
+token = localStorage.cpUserToken || sessionStorage.cpUserToken || "";
 if (token) api("/api/auth/me").then((response) => { me = response.user; loadDashboard(); }).catch(() => {});
 
 
 
 
+
+
+document.querySelectorAll("[data-toggle-password]").forEach((button) => {
+  button.onclick = () => {
+    const input = $(button.dataset.togglePassword);
+    const showing = input.type === "text";
+    input.type = showing ? "password" : "text";
+    button.textContent = showing ? "Show" : "Hide";
+  };
+});
