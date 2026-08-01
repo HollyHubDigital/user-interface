@@ -316,3 +316,37 @@ button:disabled {
 img:not([src]), img[src=""] {
   display: none;
 }
+
+
+.eye-icon {
+  position: relative;
+  display: inline-block;
+  width: 20px;
+  height: 12px;
+  border: 2px solid #fff;
+  border-radius: 999px / 70%;
+}
+
+.eye-icon::after {
+  content: "";
+  position: absolute;
+  width: 6px;
+  height: 6px;
+  left: 50%;
+  top: 50%;
+  border-radius: 50%;
+  background: #fff;
+  transform: translate(-50%, -50%);
+}
+
+.toggle-password.password-visible .eye-icon::before {
+  content: "";
+  position: absolute;
+  left: -4px;
+  right: -4px;
+  top: 50%;
+  height: 2px;
+  background: #f58f20;
+  transform: rotate(-35deg);
+  transform-origin: center;
+}

@@ -40,11 +40,11 @@ function renderSubscriptionStatus() {
   if (!$("subscriptionStatus") || !me) return;
   const subscription = me.subscription || { plan: "free", expiresAt: null };
   if (subscription.plan === "free" || !subscription.expiresAt) {
-    $("subscriptionStatus").textContent = "Plan: Free — screen preview only. Paid features require subscription.";
+    $("subscriptionStatus").textContent = "Plan: Free ï¿½ screen preview only. Paid features require subscription.";
     return;
   }
   const active = Date.parse(subscription.expiresAt) > Date.now();
-  $("subscriptionStatus").textContent = active ? `Plan: ${subscription.plan}. Active until ${new Date(subscription.expiresAt).toLocaleDateString()}.` : "Subscription expired — choose a plan to restore access.";
+  $("subscriptionStatus").textContent = active ? `Plan: ${subscription.plan}. Active until ${new Date(subscription.expiresAt).toLocaleDateString()}.` : "Subscription expired ï¿½ choose a plan to restore access.";
 }
 function refreshEnrollmentHandoff() {
   if (!$("openAgentUser")) return;
@@ -124,7 +124,7 @@ async function loadDashboard() {
   response.devices.forEach((device) => {
     const card = document.createElement("div");
     card.className = "device-card";
-    card.innerHTML = `<b>${device.name}</b><small>${device.platform} · ${device.status}</small>`;
+    card.innerHTML = `<b>${device.name}</b><small>${device.platform} ï¿½ ${device.status}</small>`;
     card.onclick = () => { selected = device; loadDashboard(); };
     if (selected && selected.id === device.id) card.style.outline = "2px solid var(--orange)";
     userDevices.appendChild(card);
@@ -350,7 +350,7 @@ document.querySelectorAll("[data-toggle-password]").forEach((button) => {
     const input = $(button.dataset.togglePassword);
     const showing = input.type === "text";
     input.type = showing ? "password" : "text";
-    button.textContent = showing ? "??" : "??";
+    button.classList.toggle("password-visible", !showing);
     button.setAttribute("aria-label", showing ? "Show password" : "Hide password");
   };
 });
