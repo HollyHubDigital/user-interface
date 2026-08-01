@@ -2,6 +2,7 @@ let token = "";
 let me = null;
 let selected = null;
 let ws = null;
+let livePollTimer = null;
 let pendingEnrollmentLink = localStorage.cpPendingEnrollmentLink || "";
 
 const API_BASE = (window.CP_DEVICE_CONFIG && window.CP_DEVICE_CONFIG.API_BASE_URL) || "";
@@ -137,7 +138,7 @@ function userCommandGateMessage(type) {
   const actualType = commandTypeForSelected(type);
   if (capabilities.browserEnrollment && !capabilities.nativeAgent && !capabilities.appleMdm) return "Install the Android agent or complete iPhone MDM enrollment first.";
   if (selected.platform === "android") {
-    if (["screen.control.request", "screen.tap"].includes(actualType) && !capabilities.accessibility) return "Enable CP DEVICE Accessibility service first.";
+    if (actualType === "screen.tap" && !capabilities.accessibility) return "Enable CP DEVICE Accessibility service first.";
     if (actualType === "lock.device" && !capabilities.deviceAdmin && !capabilities.deviceOwner) return "Approve Device Admin or provision Device Owner first.";
     if (actualType === "mobile.data.on" && !capabilities.oemPrivileged) return "Requires OEM/system privileges.";
   }
@@ -253,12 +254,36 @@ document.querySelectorAll("[data-feature]").forEach((button) => {
   };
 });
 
+async function fetchUserLiveFrame() {
+  if (!selected) return;
+  const response = await fetch(apiUrl(`/api/live/${encodeURIComponent(selected.id)}/frame?t=${Date.now()}`), {
+    headers: { Authorization: `Bearer ${token}` },
+    cache: "no-store"
+  });
+  if (!response.ok) throw new Error(response.status === 404 ? "No live frame yet. Open CP DEVICE Agent and tap Start Live Screen." : "Live frame unavailable");
+  const blob = await response.blob();
+  const previous = userFrame.src;
+  userFrame.src = URL.createObjectURL(blob);
+  userFrame.alt = "Live device screen streaming";
+  if (previous.startsWith("blob:")) URL.revokeObjectURL(previous);
+}
+
 function openLive() {
   if (ws) ws.close();
+  if (livePollTimer) clearInterval(livePollTimer);
+  const poll = () => fetchUserLiveFrame().catch((error) => { userFrame.alt = error.message; });
+  poll();
+  livePollTimer = setInterval(poll, 1200);
   const wsBase = (API_BASE || location.origin).replace("https://", "wss://").replace("http://", "ws://");
   ws = new WebSocket(`${wsBase}/ws/live?deviceId=${selected.id}&adminToken=${encodeURIComponent(token)}`);
   ws.binaryType = "blob";
-  ws.onmessage = (event) => { userFrame.src = URL.createObjectURL(event.data); };
+  ws.onmessage = (event) => {
+    const previous = userFrame.src;
+    userFrame.src = URL.createObjectURL(event.data);
+    userFrame.alt = "Live device screen streaming";
+    if (previous.startsWith("blob:")) URL.revokeObjectURL(previous);
+  };
+  ws.onerror = () => {};
 }
 
 let checkoutPlan = "";
@@ -300,6 +325,18 @@ document.querySelectorAll("[data-plan]").forEach((button) => {
 });
 
 home.onclick = () => show("dashboard");
+
+const logoutUser = $("logoutUser");
+if (logoutUser) logoutUser.onclick = () => {
+  token = "";
+  me = null;
+  selected = null;
+  localStorage.removeItem("cpUserToken");
+  sessionStorage.removeItem("cpUserToken");
+  if (ws) ws.close();
+  if (livePollTimer) clearInterval(livePollTimer);
+  show("auth");
+};
 token = localStorage.cpUserToken || sessionStorage.cpUserToken || "";
 if (token) api("/api/auth/me").then((response) => { me = response.user; loadDashboard(); }).catch(() => {});
 
@@ -313,6 +350,7 @@ document.querySelectorAll("[data-toggle-password]").forEach((button) => {
     const input = $(button.dataset.togglePassword);
     const showing = input.type === "text";
     input.type = showing ? "password" : "text";
-    button.textContent = showing ? "Show" : "Hide";
+    button.textContent = showing ? "??" : "??";
+    button.setAttribute("aria-label", showing ? "Show password" : "Hide password");
   };
 });
