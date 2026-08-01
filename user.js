@@ -7,6 +7,15 @@ const API_BASE = (window.CP_DEVICE_CONFIG && window.CP_DEVICE_CONFIG.API_BASE_UR
 const $ = (id) => document.getElementById(id);
 const apiUrl = (path) => `${API_BASE}${path}`;
 
+async function readJsonResponse(response) {
+  const text = await response.text();
+  try {
+    return text ? JSON.parse(text) : {};
+  } catch {
+    return { error: text || `HTTP ${response.status}` };
+  }
+}
+
 async function api(path, options = {}) {
   const response = await fetch(apiUrl(path), {
     ...options,
@@ -16,7 +25,7 @@ async function api(path, options = {}) {
       ...(options.headers || {})
     }
   });
-  const body = await response.json();
+  const body = await readJsonResponse(response);
   if (!response.ok) throw Object.assign(new Error(body.error || "Request failed"), body);
   return body;
 }
