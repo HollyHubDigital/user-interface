@@ -88,6 +88,31 @@ async function loadDashboard() {
   renderFiles(response.files || []);
 }
 
+function userCommandGateMessage(type) {
+  if (!selected) return "Select a device first.";
+  const capabilities = selected.capabilities || {};
+  const actualType = commandTypeForSelected(type);
+  if (capabilities.browserEnrollment && !capabilities.nativeAgent && !capabilities.appleMdm) return "Install the Android agent or complete iPhone MDM enrollment first.";
+  if (selected.platform === "android") {
+    if (["screen.control.request", "screen.tap"].includes(actualType) && !capabilities.accessibility) return "Enable CP DEVICE Accessibility service first.";
+    if (actualType === "lock.device" && !capabilities.deviceAdmin && !capabilities.deviceOwner) return "Approve Device Admin or provision Device Owner first.";
+    if (actualType === "mobile.data.on" && !capabilities.oemPrivileged) return "Requires OEM/system privileges.";
+  }
+  if (selected.platform === "ios") {
+    if (!capabilities.appleMdm) return "Install the iPhone MDM profile and complete Apple MDM/APNs enrollment first.";
+    if (actualType === "locate.device" && !capabilities.supervised) return "Requires supervised iPhone Lost Mode support.";
+    if (["file.list", "mobile.data.on"].includes(type)) return "Not supported by public Apple MDM APIs.";
+  }
+  return "";
+}
+
+function refreshFeatureGates() {
+  document.querySelectorAll("[data-feature]").forEach((button) => {
+    const message = userCommandGateMessage(button.dataset.feature);
+    button.disabled = Boolean(message);
+    button.title = message || "Available for selected device";
+  });
+}
 function renderFiles(files) {
   userFiles.innerHTML = "<h2>Exported Files</h2>";
   files.forEach((file) => {

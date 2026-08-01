@@ -222,3 +222,10 @@ a {
 .secondary {
   background: rgba(255, 255, 255, 0.16);
 }
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+  filter: grayscale(0.35);
+  box-shadow: none;
+}
