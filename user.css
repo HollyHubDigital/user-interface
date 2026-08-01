@@ -350,3 +350,7 @@ img:not([src]), img[src=""] {
   transform: rotate(-35deg);
   transform-origin: center;
 }
+
+.remove-device { margin-top: 8px; padding: 8px 10px; background: #7a2020; }
+.file-row span { display: grid; gap: 3px; }
+.file-row small { color: #ffd19b; word-break: break-all; }

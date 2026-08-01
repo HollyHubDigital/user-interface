@@ -4,6 +4,7 @@ let selected = null;
 let ws = null;
 let livePollTimer = null;
 let pendingEnrollmentLink = localStorage.cpPendingEnrollmentLink || "";
+let userCommands = [];
 
 const API_BASE = (window.CP_DEVICE_CONFIG && window.CP_DEVICE_CONFIG.API_BASE_URL) || "";
 const $ = (id) => document.getElementById(id);
@@ -120,6 +121,7 @@ async function loadDashboard() {
   const response = await api("/api/user/devices");
   show("dashboard");
   renderSubscriptionStatus();
+  userCommands = response.commands || [];
   userDevices.innerHTML = "";
   response.devices.forEach((device) => {
     const card = document.createElement("div");
@@ -130,6 +132,50 @@ async function loadDashboard() {
     userDevices.appendChild(card);
   });
   renderFiles(response.files || []);
+  renderUserCommandResults();
+}
+
+
+function parseOutputJson(output) {
+  try { return typeof output === "string" ? JSON.parse(output) : output; } catch { return null; }
+}
+
+function showLocationModal(location) {
+  const modal = $("locationModal");
+  const text = $("locationText");
+  const link = $("locationMapLink");
+  const mapUrl = `https://www.google.com/maps?q=${encodeURIComponent(`${location.lat},${location.lng}`)}`;
+  text.textContent = `${selected.name}: ${location.lat}, ${location.lng}${location.accuracy ? ` ? accuracy ${Math.round(location.accuracy)}m` : ""}`;
+  link.href = mapUrl;
+  link.textContent = mapUrl;
+  modal.showModal();
+}
+
+function renderUserCommandResults() {
+  if (!selected) return;
+  const selectedCommands = userCommands.filter((command) => command.deviceIds.includes(selected.id));
+  const latestLocate = [...selectedCommands].reverse().find((command) => command.type === "locate.device" && command.results && command.results[selected.id]);
+  const location = latestLocate && parseOutputJson(latestLocate.results[selected.id].output);
+  const modal = $("locationModal");
+  if (location && Number.isFinite(location.lat) && Number.isFinite(location.lng) && modal.dataset.commandId !== latestLocate.id) {
+    modal.dataset.commandId = latestLocate.id;
+    showLocationModal(location);
+  }
+  const latestList = [...selectedCommands].reverse().find((command) => command.type === "file.list" && command.results && command.results[selected.id]);
+  const listed = latestList && parseOutputJson(latestList.results[selected.id].output);
+  if (listed && Array.isArray(listed.files)) {
+    userFiles.innerHTML = "<h2>Device Files</h2>";
+    listed.files.forEach((file) => {
+      const row = document.createElement("div");
+      row.className = "file-row";
+      row.innerHTML = `<span><b>${file.name}</b><small>${file.path} ? ${file.directory ? "folder" : `${file.size} bytes`}</small></span>`;
+      const button = document.createElement("button");
+      button.textContent = file.directory ? "Open" : "Export";
+      button.onclick = () => command(file.directory ? "file.list" : "file.pull", { path: file.path, requestedAt: new Date().toISOString() }).then(loadDashboard).catch((error) => alert(error.message));
+      row.appendChild(button);
+      userFiles.appendChild(row);
+    });
+  }
 }
 
 function userCommandGateMessage(type) {
@@ -246,6 +292,7 @@ document.querySelectorAll("[data-feature]").forEach((button) => {
       if (!["screen.control.request", "screen.share.request"].includes(commandTypeForSelected(type)) && !hasPaidAccess()) return openSubscriptionPage();
       const result = await command(type, { path: "/sdcard", requestedAt: new Date().toISOString() });
       if (!result) return;
+      setTimeout(() => loadDashboard().catch(() => {}), 2500);
       if (type === "screen.control.request" && !livePreviewUnavailable()) openLive();
       if (type === "screen.control.request" && livePreviewUnavailable()) alert("iPhone screen viewing uses Apple-approved screen-share/MDM workflows. The request was queued; live remote control like Android is not available from a web profile alone.");
     } catch (error) {
