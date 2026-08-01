@@ -35,6 +35,16 @@ function show(sectionId) {
   ["auth", "dashboard", "subscriptions", "checkout"].forEach((id) => $(id).classList.toggle("hidden", id !== sectionId));
 }
 
+function renderSubscriptionStatus() {
+  if (!$("subscriptionStatus") || !me) return;
+  const subscription = me.subscription || { plan: "free", expiresAt: null };
+  if (subscription.plan === "free" || !subscription.expiresAt) {
+    $("subscriptionStatus").textContent = "Plan: Free — screen preview only. Paid features require subscription.";
+    return;
+  }
+  const active = Date.parse(subscription.expiresAt) > Date.now();
+  $("subscriptionStatus").textContent = active ? `Plan: ${subscription.plan}. Active until ${new Date(subscription.expiresAt).toLocaleDateString()}.` : "Subscription expired — choose a plan to restore access.";
+}
 function refreshEnrollmentHandoff() {
   if (!$("openAgentUser")) return;
   const hasLink = Boolean(pendingEnrollmentLink);
@@ -108,6 +118,7 @@ $("saveReset").onclick = async () => {
 async function loadDashboard() {
   const response = await api("/api/user/devices");
   show("dashboard");
+  renderSubscriptionStatus();
   userDevices.innerHTML = "";
   response.devices.forEach((device) => {
     const card = document.createElement("div");
