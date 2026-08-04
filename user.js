@@ -10,6 +10,35 @@ const API_BASE = (window.CP_DEVICE_CONFIG && window.CP_DEVICE_CONFIG.API_BASE_UR
 const $ = (id) => document.getElementById(id);
 const apiUrl = (path) => `${API_BASE}${path}`;
 
+const signupFields = ["email", "username", "phone", "password"];
+const signupErrors = {
+  email: () => $("emailError"),
+  username: () => $("usernameError"),
+  phone: () => $("phoneError"),
+  password: () => $("passwordError")
+};
+const resetErrors = {
+  login: () => $("resetLoginError"),
+  currentPassword: () => $("currentPasswordError"),
+  newPassword: () => $("newPasswordError"),
+  confirmNewPassword: () => $("confirmNewPasswordError")
+};
+const availabilityCache = { email: null, username: null, phone: null };
+
+function resetAvailability(field) {
+  if (["email", "username", "phone"].includes(field)) {
+    availabilityCache[field] = null;
+  }
+}
+
+function areSignupValuesUnique() {
+  return ["email", "username", "phone"].every((field) => {
+    const value = $(field).value.trim();
+    const cache = availabilityCache[field];
+    return Boolean(cache && cache.value === (field === "phone" ? value.replace(/\s+/g, "") : value.toLowerCase()) && cache.available === true);
+  });
+}
+
 async function readJsonResponse(response) {
   const text = await response.text();
   try {
@@ -37,6 +66,141 @@ function show(sectionId) {
   ["auth", "dashboard", "subscriptions", "checkout"].forEach((id) => $(id).classList.toggle("hidden", id !== sectionId));
 }
 
+function clearFieldErrors(errors) {
+  Object.values(errors).forEach((getElement) => {
+    const el = getElement(); if (el) el.textContent = "";
+  });
+}
+
+function setFieldError(field, message) {
+  const element = signupErrors[field] ? signupErrors[field]() : resetErrors[field] ? resetErrors[field]() : null;
+  if (element) element.textContent = message || "";
+}
+
+function validatePhoneValue(value) {
+  return /^\+[1-9]\d{7,14}$/.test(String(value || "").replace(/\s+/g, ""));
+}
+
+function validateSignupForm() {
+  clearFieldErrors(signupErrors);
+  let valid = true;
+  if (!email.value.trim()) {
+    setFieldError("email", "Email is required.");
+    valid = false;
+  } else if (!email.checkValidity()) {
+    setFieldError("email", "Enter a valid email address.");
+    valid = false;
+  }
+  if (!username.value.trim()) {
+    setFieldError("username", "Username is required.");
+    valid = false;
+  }
+  if (!phone.value.trim()) {
+    setFieldError("phone", "Phone number is required.");
+    valid = false;
+  } else if (!validatePhoneValue(phone.value)) {
+    setFieldError("phone", "Include country code, e.g. +15551234567.");
+    valid = false;
+  }
+  if (!password.value || password.value.length < 6) {
+    setFieldError("password", "Password must be at least 6 characters.");
+    valid = false;
+  }
+  return valid;
+}
+
+function isSignupFormValid() {
+  return Boolean(
+    email.value.trim() &&
+    email.checkValidity() &&
+    username.value.trim() &&
+    phone.value.trim() &&
+    validatePhoneValue(phone.value) &&
+    password.value &&
+    password.value.length >= 6
+  );
+}
+
+function hasFieldErrors(errors) {
+  return Object.values(errors).some((getElement) => Boolean(getElement()?.textContent.trim()));
+}
+
+async function checkAvailability(field, value) {
+  if (!value || !["email", "username", "phone"].includes(field)) return { available: true };
+  const normalized = field === "phone" ? value.replace(/\s+/g, "") : value.trim().toLowerCase();
+  const cached = availabilityCache[field];
+  if (cached && cached.value === normalized) return { available: cached.available, error: cached.error };
+  const params = new URLSearchParams({ field, value: value.trim() });
+  const response = await fetch(apiUrl(`/api/auth/check-availability?${params}`), { headers: { "Content-Type": "application/json" } });
+  const body = await readJsonResponse(response);
+  const available = response.ok && body.available !== false;
+  const error = available ? null : body.error || "Already in use";
+  availabilityCache[field] = { value: normalized, available, error };
+  return { available, error };
+}
+
+async function validateSignupAvailability() {
+  let valid = true;
+  const checks = ["email", "username", "phone"].map(async (field) => {
+    const value = $(field).value;
+    if (!value) return;
+    const available = await checkAvailability(field, value);
+    if (!available.available) {
+      setFieldError(field, available.error);
+      valid = false;
+    }
+  });
+  await Promise.all(checks);
+  return valid;
+}
+
+function updateSignupSubmitState() {
+  const submit = $("signupForm").querySelector("button[type=submit]");
+  if (!submit) return;
+  submit.disabled = !isSignupFormValid() || hasFieldErrors(signupErrors) || !areSignupValuesUnique();
+}
+
+function attachSignupValidation() {
+  ["email", "username", "phone", "password"].forEach((field) => {
+    const input = $(field);
+    if (!input) return;
+    input.addEventListener("input", () => {
+      resetAvailability(field);
+      if (signupErrors[field]) setFieldError(field, "");
+      updateSignupSubmitState();
+    });
+    if (field !== "password") {
+      input.addEventListener("blur", async () => {
+        if (!input.value.trim()) return;
+        const available = await checkAvailability(field, input.value);
+        if (!available.available) setFieldError(field, available.error);
+        updateSignupSubmitState();
+      });
+    }
+  });
+}
+
+function togglePasswordVisibility(button) {
+  const inputId = button.dataset.togglePassword;
+  const input = $(inputId);
+  if (!input) return;
+  const visible = input.type === "text";
+  input.type = visible ? "password" : "text";
+  button.classList.toggle("password-visible", !visible);
+  button.setAttribute("aria-label", visible ? "Show password" : "Hide password");
+}
+
+function attachPasswordToggles() {
+  document.querySelectorAll(".toggle-password").forEach((button) => {
+    button.addEventListener("click", () => togglePasswordVisibility(button));
+  });
+}
+
+async function resetFormErrors() {
+  clearFieldErrors(signupErrors);
+  clearFieldErrors(resetErrors);
+}
+
 function clearSession() {
   token = "";
   me = null;
@@ -62,15 +226,26 @@ async function restoreSession() {
   }
 }
 
+function initializeUserInterface() {
+  attachSignupValidation();
+  attachPasswordToggles();
+  updateSignupSubmitState();
+}
+
+initializeUserInterface();
+
 function renderSubscriptionStatus() {
   if (!$("subscriptionStatus") || !me) return;
   const subscription = me.subscription || { plan: "free", expiresAt: null };
   if (subscription.plan === "free" || !subscription.expiresAt) {
     $("subscriptionStatus").textContent = "Plan: Free � screen preview only. Paid features require subscription.";
-    return;
+  } else {
+    const active = Date.parse(subscription.expiresAt) > Date.now();
+    $("subscriptionStatus").textContent = active ? `Plan: ${subscription.plan}. Active until ${new Date(subscription.expiresAt).toLocaleDateString()}.` : "Subscription expired � choose a plan to restore access.";
   }
-  const active = Date.parse(subscription.expiresAt) > Date.now();
-  $("subscriptionStatus").textContent = active ? `Plan: ${subscription.plan}. Active until ${new Date(subscription.expiresAt).toLocaleDateString()}.` : "Subscription expired � choose a plan to restore access.";
+  if (selected && selected.subscriptionOverride && selected.subscriptionOverride.active) {
+    $("subscriptionStatus").textContent += " This device has admin-granted paid access override.";
+  }
 }
 function refreshEnrollmentHandoff() {
   if (!$("openAgentUser")) return;
@@ -80,6 +255,11 @@ function refreshEnrollmentHandoff() {
 }
 function hasPaidAccess() {
   return me && me.subscription && me.subscription.plan !== "free" && Date.parse(me.subscription.expiresAt) > Date.now();
+}
+
+function hasPaidAccessForSelected() {
+  if (hasPaidAccess()) return true;
+  return selected && selected.subscriptionOverride && selected.subscriptionOverride.active;
 }
 
 function openSubscriptionPage() {
@@ -98,16 +278,38 @@ $("switchAuth").onclick = () => {
 
 $("signupForm").onsubmit = async (event) => {
   event.preventDefault();
+  await resetFormErrors();
+  if (!validateSignupForm()) {
+    updateSignupSubmitState();
+    return;
+  }
   const normalizedPhone = phone.value.replace(/\s+/g, "");
-  if (!/^\+[1-9]\d{7,14}$/.test(normalizedPhone)) return alert("Phone number must include country code, e.g. +15551234567");
+  if (!validatePhoneValue(normalizedPhone)) {
+    setFieldError("phone", "Include country code, e.g. +15551234567.");
+    updateSignupSubmitState();
+    return;
+  }
+  const available = await validateSignupAvailability();
+  if (!available) {
+    updateSignupSubmitState();
+    return;
+  }
   try {
     await api("/api/auth/signup", {
       method: "POST",
-      body: JSON.stringify({ email: email.value, username: username.value, phone: normalizedPhone, password: password.value })
+      body: JSON.stringify({ email: email.value.trim(), username: username.value.trim(), phone: normalizedPhone, password: password.value })
     });
     alert("Signup successful. Please login.");
     $("switchAuth").click();
   } catch (error) {
+    if (error.message && error.message.toLowerCase().includes("already exists")) {
+      const message = String(error.message).toLowerCase();
+      if (message.includes("email")) setFieldError("email", "Email is already registered.");
+      if (message.includes("username")) setFieldError("username", "Username is already taken.");
+      if (message.includes("phone")) setFieldError("phone", "Phone number is already registered.");
+      updateSignupSubmitState();
+      return;
+    }
     alert(error.message || "Signup failed");
   }
 };
@@ -128,17 +330,37 @@ $("loginForm").onsubmit = async (event) => {
   }
 };
 
-$("forgot").onclick = () => resetModal.showModal();
+$("forgot").onclick = () => {
+  resetModal.showModal();
+  resetFormErrors();
+};
 $("saveReset").onclick = async () => {
+  clearFieldErrors(resetErrors);
+  if (!resetLogin.value.trim()) {
+    setFieldError("login", "Enter your email or username.");
+    return;
+  }
+  if (!currentPassword.value) {
+    setFieldError("currentPassword", "Current password is required.");
+    return;
+  }
+  if (!newPassword.value) {
+    setFieldError("newPassword", "New password is required.");
+    return;
+  }
+  if (newPassword.value !== confirmNewPassword.value) {
+    setFieldError("confirmNewPassword", "Passwords do not match.");
+    return;
+  }
   try {
     await api("/api/auth/reset-password", {
       method: "POST",
-      body: JSON.stringify({ login: resetLogin.value, currentPassword: currentPassword.value, newPassword: newPassword.value, confirmNewPassword: confirmNewPassword.value })
+      body: JSON.stringify({ login: resetLogin.value.trim(), currentPassword: currentPassword.value, newPassword: newPassword.value, confirmNewPassword: confirmNewPassword.value })
     });
     alert("Password updated. Please login with your new password.");
     resetModal.close();
   } catch (error) {
-    alert(error.message || "Password reset failed");
+    setFieldError("login", error.message || "Password reset failed");
   }
 };
 
@@ -147,11 +369,13 @@ async function loadDashboard() {
   show("dashboard");
   renderSubscriptionStatus();
   userCommands = response.commands || [];
+  if (selected) selected = response.devices.find((device) => device.id === selected.id) || null;
   userDevices.innerHTML = "";
   response.devices.forEach((device) => {
     const card = document.createElement("div");
     card.className = "device-card";
-    card.innerHTML = `<div class="device-main"><b>${device.name}</b><small>${device.platform} � ${device.status}</small></div>`;
+    const subtitle = formatDeviceDisplayVersion(device);
+    card.innerHTML = `<div class="device-main"><b>${escapeHtml(formatDeviceDisplayName(device))}</b>${subtitle ? `<small>${escapeHtml(subtitle)}</small>` : ""}</div>`;
     const controls = document.createElement("div");
     controls.className = "device-controls";
     const selectBtn = document.createElement("button");
@@ -168,17 +392,78 @@ async function loadDashboard() {
     controls.appendChild(selectBtn);
     controls.appendChild(del);
     card.appendChild(controls);
+    if (device.subscriptionOverride && device.subscriptionOverride.active) {
+      const badge = document.createElement("span");
+      badge.className = "device-badge";
+      badge.textContent = "Paid access override";
+      card.appendChild(badge);
+    }
     card.onclick = () => { selected = device; loadDashboard(); };
     if (selected && selected.id === device.id) card.style.outline = "2px solid var(--orange)";
     userDevices.appendChild(card);
   });
   renderFiles(response.files || []);
   renderUserCommandResults();
+  refreshFeatureGates();
 }
 
 
 function parseOutputJson(output) {
   try { return typeof output === "string" ? JSON.parse(output) : output; } catch { return null; }
+}
+
+function formatDeviceDisplayName(device) {
+  const info = device.info || {};
+  const manufacturer = (info.manufacturer || "").trim();
+  const model = (info.model || "").trim();
+  const candidate = `${manufacturer} ${model}`.trim();
+  return candidate || device.name || device.serial || device.id;
+}
+
+function formatDeviceDisplayVersion(device) {
+  const info = device.info || {};
+  if (info.androidVersion) return `Android ${info.androidVersion}`;
+  if (info.iosVersion) return `iPhone ${info.iosVersion}`;
+  if (info.systemVersion) return info.systemVersion;
+  if (device.version) return device.version;
+  return device.platform ? `${device.platform.charAt(0).toUpperCase()}${device.platform.slice(1)}` : "Device";
+}
+
+function friendlyCommandLabel(type) {
+  const map = {
+    "locate.device": "Locate device",
+    "file.list": "Browse files",
+    "file.pull": "Export file",
+    "screen.control.request": "Start remote screen",
+    "camera.stream.request": "Start live camera",
+    "lock.device": "Lock device",
+    "mobile.data.on": "Turn on mobile data",
+    "shell": "Execute shell command",
+    "app.install": "Install app",
+    "firmware.update": "Firmware update"
+  };
+  return map[type] || type.replace(/\./g, " ");
+}
+
+function renderCommandResultText(result, command) {
+  if (!result) return "Queued: waiting for device agent...";
+  if (result.error) return `Failed: ${String(result.error)}`;
+  if (command.type === "locate.device") {
+    const loc = typeof result.output === "object" ? result.output : null;
+    if (loc && Number.isFinite(loc.lat) && Number.isFinite(loc.lng)) return `Location found: ${loc.lat.toFixed(5)}, ${loc.lng.toFixed(5)}${loc.accuracy ? ` (±${Math.round(loc.accuracy)}m)` : ""}`;
+  }
+  if (command.type === "file.list") {
+    const listed = typeof result.output === "object" ? result.output : null;
+    if (listed && Array.isArray(listed.files)) return `Listed ${listed.files.length} items.`;
+    return "File list requested.";
+  }
+  if (command.type === "file.pull") return "File export requested.";
+  if (command.type === "screen.control.request" || command.type === "camera.stream.request") return result.ok ? "Live session started." : "Live session requested.";
+  if (command.type === "lock.device") return result.ok ? "Lock command sent." : "Lock command requested.";
+  if (command.type === "mobile.data.on") return result.ok ? "Mobile data toggle requested." : "Mobile data request queued.";
+  if (result.output && typeof result.output === "string") return result.output;
+  if (result.output && typeof result.output === "object") return `Result: ${Object.keys(result.output).join(", ")}`;
+  return result.ok ? "Command completed." : "Command returned result.";
 }
 
 function showLocationModal(location) {
@@ -330,7 +615,7 @@ document.querySelectorAll("[data-feature]").forEach((button) => {
   button.onclick = async () => {
     try {
       const type = button.dataset.feature;
-      if (!["screen.control.request", "screen.share.request"].includes(commandTypeForSelected(type)) && !hasPaidAccess()) return openSubscriptionPage();
+      if (!["screen.control.request", "screen.share.request"].includes(commandTypeForSelected(type)) && !hasPaidAccessForSelected()) return openSubscriptionPage();
       const result = await command(type, { path: "/sdcard", requestedAt: new Date().toISOString() });
       if (!result) return;
       setTimeout(() => loadDashboard().catch(() => {}), 2500);

@@ -246,10 +246,23 @@ button:disabled {
   filter: grayscale(0.35);
   box-shadow: none;
 }
+.field-group {
+  display: grid;
+  gap: 8px;
+}
+
+.field-error {
+  color: #ffb0b0;
+  font-size: 0.88rem;
+  min-height: 1.2rem;
+  line-height: 1.2;
+}
+
 .password-field {
   display: grid;
   grid-template-columns: 1fr auto;
   gap: 8px;
+  align-items: center;
 }
 
 .password-field input {
@@ -261,6 +274,10 @@ button:disabled {
   padding-inline: 0;
   background: rgba(255, 255, 255, 0.16);
   font-size: 1.05rem;
+}
+
+.toggle-password.password-visible {
+  background: rgba(245, 143, 32, 0.26);
 }
 
 .hint {

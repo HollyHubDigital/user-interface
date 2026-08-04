@@ -59,11 +59,24 @@
 
         <form id="signupForm" class="auth-card">
           <h2>Signup</h2>
-          <input id="email" type="email" placeholder="Email" />
-          <input id="username" placeholder="Username" />
-          <input id="phone" type="tel" inputmode="tel" pattern="^\+[1-9][0-9]{7,14}$" placeholder="Phone e.g. +1 5551234567" title="Include country code, e.g. +15551234567" required />
-          <div class="password-field"><input id="password" type="password" placeholder="Password" /><button type="button" class="toggle-password" data-toggle-password="password" aria-label="Show password"><span class="eye-icon" aria-hidden="true"></span></button></div>
-          <button>Sign up</button>
+          <div class="field-group">
+            <input id="email" type="email" placeholder="Email" />
+            <div class="field-error" id="emailError"></div>
+          </div>
+          <div class="field-group">
+            <input id="username" placeholder="Username" />
+            <div class="field-error" id="usernameError"></div>
+          </div>
+          <div class="field-group">
+            <input id="phone" type="tel" inputmode="tel" pattern="^\+[1-9][0-9]{7,14}$" placeholder="Phone e.g. +1 5551234567" title="Include country code, e.g. +15551234567" required />
+            <div class="field-error" id="phoneError"></div>
+          </div>
+          <div class="field-group password-field">
+            <input id="password" type="password" placeholder="Password" />
+            <button type="button" class="toggle-password" data-toggle-password="password" aria-label="Show password"><span class="eye-icon" aria-hidden="true"></span></button>
+            <div class="field-error" id="passwordError"></div>
+          </div>
+          <button type="submit">Sign up</button>
         </form>
       </section>
 
@@ -141,10 +154,25 @@
     <dialog id="resetModal">
       <form method="dialog" class="glass modal">
         <h2>Reset Password</h2>
-        <input id="resetLogin" placeholder="Email or Username" />
-        <div class="password-field"><input id="currentPassword" type="password" placeholder="Current password" /><button type="button" class="toggle-password" data-toggle-password="currentPassword" aria-label="Show password"><span class="eye-icon" aria-hidden="true"></span></button></div>
-        <div class="password-field"><input id="newPassword" type="password" placeholder="New Password" /><button type="button" class="toggle-password" data-toggle-password="newPassword" aria-label="Show password"><span class="eye-icon" aria-hidden="true"></span></button></div>
-        <div class="password-field"><input id="confirmNewPassword" type="password" placeholder="Confirm New Password" /><button type="button" class="toggle-password" data-toggle-password="confirmNewPassword" aria-label="Show password"><span class="eye-icon" aria-hidden="true"></span></button></div>
+        <div class="field-group">
+          <input id="resetLogin" placeholder="Email or Username" />
+          <div class="field-error" id="resetLoginError"></div>
+        </div>
+        <div class="field-group password-field">
+          <input id="currentPassword" type="password" placeholder="Current password" />
+          <button type="button" class="toggle-password" data-toggle-password="currentPassword" aria-label="Show password"><span class="eye-icon" aria-hidden="true"></span></button>
+          <div class="field-error" id="currentPasswordError"></div>
+        </div>
+        <div class="field-group password-field">
+          <input id="newPassword" type="password" placeholder="New Password" />
+          <button type="button" class="toggle-password" data-toggle-password="newPassword" aria-label="Show password"><span class="eye-icon" aria-hidden="true"></span></button>
+          <div class="field-error" id="newPasswordError"></div>
+        </div>
+        <div class="field-group password-field">
+          <input id="confirmNewPassword" type="password" placeholder="Confirm New Password" />
+          <button type="button" class="toggle-password" data-toggle-password="confirmNewPassword" aria-label="Show password"><span class="eye-icon" aria-hidden="true"></span></button>
+          <div class="field-error" id="confirmNewPasswordError"></div>
+        </div>
         <button id="saveReset" type="button">Save</button>
         <button>Cancel</button>
       </form>
