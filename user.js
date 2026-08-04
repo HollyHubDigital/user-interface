@@ -1,9 +1,9 @@
-let token = "";
+let token = localStorage.getItem("cpUserToken") || "";
 let me = null;
 let selected = null;
 let ws = null;
 let livePollTimer = null;
-let pendingEnrollmentLink = localStorage.cpPendingEnrollmentLink || "";
+let pendingEnrollmentLink = localStorage.getItem("cpPendingEnrollmentLink") || "";
 let userCommands = [];
 
 const API_BASE = (window.CP_DEVICE_CONFIG && window.CP_DEVICE_CONFIG.API_BASE_URL) || "";
@@ -35,6 +35,31 @@ async function api(path, options = {}) {
 
 function show(sectionId) {
   ["auth", "dashboard", "subscriptions", "checkout"].forEach((id) => $(id).classList.toggle("hidden", id !== sectionId));
+}
+
+function clearSession() {
+  token = "";
+  me = null;
+  selected = null;
+  localStorage.removeItem("cpUserToken");
+  show("auth");
+  if ($("loginForm")) $("loginForm").classList.add("active");
+  if ($("signupForm")) $("signupForm").classList.remove("active");
+  if ($("switchAuth")) $("switchAuth").textContent = "Signup";
+  if ($("loginUser")) $("loginUser").value = "";
+  if ($("loginPass")) $("loginPass").value = "";
+}
+
+async function restoreSession() {
+  if (!token) return;
+  try {
+    const response = await api("/api/auth/me");
+    me = response.user;
+    localStorage.setItem("cpUserToken", token);
+    await loadDashboard();
+  } catch {
+    clearSession();
+  }
 }
 
 function renderSubscriptionStatus() {
@@ -375,17 +400,14 @@ home.onclick = () => show("dashboard");
 
 const logoutUser = $("logoutUser");
 if (logoutUser) logoutUser.onclick = () => {
-  token = "";
-  me = null;
-  selected = null;
-  localStorage.removeItem("cpUserToken");
-  sessionStorage.removeItem("cpUserToken");
   if (ws) ws.close();
   if (livePollTimer) clearInterval(livePollTimer);
-  show("auth");
+  clearSession();
 };
-token = localStorage.cpUserToken || sessionStorage.cpUserToken || "";
-if (token) api("/api/auth/me").then((response) => { me = response.user; loadDashboard(); }).catch(() => {});
+
+if (token) {
+  restoreSession();
+}
 
 
 
