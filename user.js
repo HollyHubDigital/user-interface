@@ -417,9 +417,9 @@ if (loginFormEl) {
 }
 
 const forgotButton = $("forgot");
-if (forgotButton && resetModal) {
+if (forgotButton && resetModalEl) {
   forgotButton.onclick = () => {
-    resetModal.showModal();
+    resetModalEl.showModal();
     resetFormErrors();
   };
 }
@@ -428,33 +428,34 @@ const saveResetButton = $("saveReset");
 if (saveResetButton) {
   saveResetButton.onclick = async () => {
     clearFieldErrors(resetErrors);
-    if (!resetLogin || !resetLogin.value.trim()) {
+    if (!resetLoginEl || !resetLoginEl.value.trim()) {
       setFieldError("login", "Enter your email or username.");
       return;
     }
-    if (!currentPassword || !currentPassword.value) {
+    if (!currentPasswordEl || !currentPasswordEl.value) {
       setFieldError("currentPassword", "Current password is required.");
       return;
     }
-    if (!newPassword || !newPassword.value) {
+    if (!newPasswordEl || !newPasswordEl.value) {
       setFieldError("newPassword", "New password is required.");
       return;
     }
-    if (!confirmNewPassword || newPassword.value !== confirmNewPassword.value) {
+    if (!confirmNewPasswordEl || newPasswordEl.value !== confirmNewPasswordEl.value) {
       setFieldError("confirmNewPassword", "Passwords do not match.");
-    return;
-  }
-  try {
-    await api("/api/auth/reset-password", {
-      method: "POST",
-      body: JSON.stringify({ login: resetLogin.value.trim(), currentPassword: currentPassword.value, newPassword: newPassword.value, confirmNewPassword: confirmNewPassword.value })
-    });
-    alert("Password updated. Please login with your new password.");
-    resetModal.close();
-  } catch (error) {
-    setFieldError("login", error.message || "Password reset failed");
-  }
-};
+      return;
+    }
+    try {
+      await api("/api/auth/reset-password", {
+        method: "POST",
+        body: JSON.stringify({ login: resetLoginEl.value.trim(), currentPassword: currentPasswordEl.value, newPassword: newPasswordEl.value, confirmNewPassword: confirmNewPasswordEl.value })
+      });
+      alert("Password updated. Please login with your new password.");
+      if (resetModalEl) resetModalEl.close();
+    } catch (error) {
+      setFieldError("login", error.message || "Password reset failed");
+    }
+  };
+}
 
 async function loadDashboard() {
   const response = await api("/api/user/devices");
