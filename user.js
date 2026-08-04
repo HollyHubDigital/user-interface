@@ -151,7 +151,23 @@ async function loadDashboard() {
   response.devices.forEach((device) => {
     const card = document.createElement("div");
     card.className = "device-card";
-    card.innerHTML = `<b>${device.name}</b><small>${device.platform} � ${device.status}</small>`;
+    card.innerHTML = `<div class="device-main"><b>${device.name}</b><small>${device.platform} � ${device.status}</small></div>`;
+    const controls = document.createElement("div");
+    controls.className = "device-controls";
+    const selectBtn = document.createElement("button");
+    selectBtn.textContent = "Select";
+    selectBtn.onclick = () => { selected = device; loadDashboard(); };
+    const del = document.createElement("button");
+    del.className = "danger";
+    del.textContent = "Delete";
+    del.onclick = async (e) => {
+      e.stopPropagation();
+      if (!confirm(`Delete device ${device.name}? This cannot be undone.`)) return;
+      try { await api(`/api/user/devices/${encodeURIComponent(device.id)}`, { method: "DELETE" }); selected = null; await loadDashboard(); } catch (err) { alert(err.message || err); }
+    };
+    controls.appendChild(selectBtn);
+    controls.appendChild(del);
+    card.appendChild(controls);
     card.onclick = () => { selected = device; loadDashboard(); };
     if (selected && selected.id === device.id) card.style.outline = "2px solid var(--orange)";
     userDevices.appendChild(card);
@@ -358,6 +374,18 @@ function openLive() {
   ws.onerror = () => {};
 }
 
+// allow tapping the live frame to send remote touch events (user-initiated)
+const userFrameEl = $("userFrame");
+if (userFrameEl) {
+  userFrameEl.addEventListener("click", (ev) => {
+    if (!selected) return;
+    const rect = userFrameEl.getBoundingClientRect();
+    const x = Math.round(((ev.clientX - rect.left) / rect.width) * 720);
+    const y = Math.round(((ev.clientY - rect.top) / rect.height) * 1280);
+    command("screen.tap", { x, y, requestedAt: new Date().toISOString() }).then(() => setTimeout(loadDashboard, 1000)).catch((err) => alert(err.message || err));
+  });
+}
+
 let checkoutPlan = "";
 
 function preferredProvider() {
@@ -402,6 +430,7 @@ const logoutUser = $("logoutUser");
 if (logoutUser) logoutUser.onclick = () => {
   if (ws) ws.close();
   if (livePollTimer) clearInterval(livePollTimer);
+  try { api("/api/auth/logout", { method: "POST" }).catch(() => {}); } catch {};
   clearSession();
 };
 
