@@ -143,6 +143,36 @@ function setFieldError(field, message) {
   if (element) element.textContent = message || "";
 }
 
+function clearSession() {
+  token = "";
+  me = null;
+  selected = null;
+  if (ws) {
+    ws.close();
+    ws = null;
+  }
+  if (livePollTimer) {
+    clearInterval(livePollTimer);
+    livePollTimer = null;
+  }
+  localStorage.removeItem("cpUserToken");
+  localStorage.removeItem("cpPendingEnrollmentLink");
+}
+
+async function tryRestoreSession() {
+  if (!token) return false;
+  try {
+    const response = await api("/api/auth/me");
+    if (!response.user) throw new Error("Login required");
+    me = response.user;
+    localStorage.cpUserToken = token;
+    return true;
+  } catch (error) {
+    clearSession();
+    return false;
+  }
+}
+
 function validatePhoneValue(value) {
   return /^\+[1-9]\d{7,14}$/.test(String(value || "").replace(/\s+/g, ""));
 }
