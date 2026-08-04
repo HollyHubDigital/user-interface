@@ -10,6 +10,38 @@ const API_BASE = (window.CP_DEVICE_CONFIG && window.CP_DEVICE_CONFIG.API_BASE_UR
 const $ = (id) => document.getElementById(id);
 const apiUrl = (path) => `${API_BASE}${path}`;
 
+const signupFormEl = $("signupForm");
+const loginFormEl = $("loginForm");
+const switchAuthEl = $("switchAuth");
+const emailEl = $("email");
+const usernameEl = $("username");
+const phoneEl = $("phone");
+const passwordEl = $("password");
+const loginUserEl = $("loginUser");
+const loginPassEl = $("loginPass");
+const resetModalEl = $("resetModal");
+const resetLoginEl = $("resetLogin");
+const currentPasswordEl = $("currentPassword");
+const newPasswordEl = $("newPassword");
+const confirmNewPasswordEl = $("confirmNewPassword");
+const userDevicesEl = $("userDevices");
+const userFilesEl = $("userFiles");
+const userFrameEl = $("userFrame");
+const subscriptionStatusEl = $("subscriptionStatus");
+const enrollUserEl = $("enrollUser");
+const openAgentUserEl = $("openAgentUser");
+const enrollHelpEl = $("enrollHelp");
+const paymentMethodEl = $("paymentMethod");
+const checkoutSummaryEl = $("checkoutSummary");
+const checkoutStatusEl = $("checkoutStatus");
+const confirmPaymentEl = $("confirmPayment");
+const checkoutBackEl = $("checkoutBack");
+const homeEl = $("home");
+const logoutUserEl = $("logoutUser");
+const locationModalEl = $("locationModal");
+const locationTextEl = $("locationText");
+const locationMapLinkEl = $("locationMapLink");
+
 const signupFields = ["email", "username", "phone", "password"];
 const signupErrors = {
   email: () => $("emailError"),
@@ -33,7 +65,9 @@ function resetAvailability(field) {
 
 function areSignupValuesUnique() {
   return ["email", "username", "phone"].every((field) => {
-    const value = $(field).value.trim();
+    const input = $(field);
+    if (!input) return true;
+    const value = input.value.trim();
     const cache = availabilityCache[field];
     return Boolean(cache && cache.value === (field === "phone" ? value.replace(/\s+/g, "") : value.toLowerCase()) && cache.available === true);
   });
@@ -84,25 +118,25 @@ function validatePhoneValue(value) {
 function validateSignupForm() {
   clearFieldErrors(signupErrors);
   let valid = true;
-  if (!email.value.trim()) {
+  if (!emailEl.value.trim()) {
     setFieldError("email", "Email is required.");
     valid = false;
-  } else if (!email.checkValidity()) {
+  } else if (!emailEl.checkValidity()) {
     setFieldError("email", "Enter a valid email address.");
     valid = false;
   }
-  if (!username.value.trim()) {
+  if (!usernameEl.value.trim()) {
     setFieldError("username", "Username is required.");
     valid = false;
   }
-  if (!phone.value.trim()) {
+  if (!phoneEl.value.trim()) {
     setFieldError("phone", "Phone number is required.");
     valid = false;
-  } else if (!validatePhoneValue(phone.value)) {
+  } else if (!validatePhoneValue(phoneEl.value)) {
     setFieldError("phone", "Include country code, e.g. +15551234567.");
     valid = false;
   }
-  if (!password.value || password.value.length < 6) {
+  if (!passwordEl.value || passwordEl.value.length < 6) {
     setFieldError("password", "Password must be at least 6 characters.");
     valid = false;
   }
@@ -111,13 +145,13 @@ function validateSignupForm() {
 
 function isSignupFormValid() {
   return Boolean(
-    email.value.trim() &&
-    email.checkValidity() &&
-    username.value.trim() &&
-    phone.value.trim() &&
-    validatePhoneValue(phone.value) &&
-    password.value &&
-    password.value.length >= 6
+    emailEl && emailEl.value.trim() &&
+    emailEl.checkValidity() &&
+    usernameEl && usernameEl.value.trim() &&
+    phoneEl && phoneEl.value.trim() &&
+    validatePhoneValue(phoneEl.value) &&
+    passwordEl && passwordEl.value &&
+    passwordEl.value.length >= 6
   );
 }
 
@@ -155,9 +189,10 @@ async function validateSignupAvailability() {
 }
 
 function updateSignupSubmitState() {
-  const submit = $("signupForm").querySelector("button[type=submit]");
+  if (!signupFormEl) return;
+  const submit = signupFormEl.querySelector("button[type=submit]");
   if (!submit) return;
-  submit.disabled = !isSignupFormValid() || hasFieldErrors(signupErrors) || !areSignupValuesUnique();
+  submit.disabled = !isSignupFormValid() || hasFieldErrors(signupErrors);
 }
 
 function attachSignupValidation() {
@@ -276,59 +311,67 @@ $("switchAuth").onclick = () => {
   $("switchAuth").textContent = showSignup ? "Login" : "Signup";
 };
 
-$("signupForm").onsubmit = async (event) => {
-  event.preventDefault();
-  await resetFormErrors();
-  if (!validateSignupForm()) {
-    updateSignupSubmitState();
-    return;
-  }
-  const normalizedPhone = phone.value.replace(/\s+/g, "");
-  if (!validatePhoneValue(normalizedPhone)) {
-    setFieldError("phone", "Include country code, e.g. +15551234567.");
-    updateSignupSubmitState();
-    return;
-  }
-  const available = await validateSignupAvailability();
-  if (!available) {
-    updateSignupSubmitState();
-    return;
-  }
-  try {
-    await api("/api/auth/signup", {
-      method: "POST",
-      body: JSON.stringify({ email: email.value.trim(), username: username.value.trim(), phone: normalizedPhone, password: password.value })
-    });
-    alert("Signup successful. Please login.");
-    $("switchAuth").click();
-  } catch (error) {
-    if (error.message && error.message.toLowerCase().includes("already exists")) {
-      const message = String(error.message).toLowerCase();
-      if (message.includes("email")) setFieldError("email", "Email is already registered.");
-      if (message.includes("username")) setFieldError("username", "Username is already taken.");
-      if (message.includes("phone")) setFieldError("phone", "Phone number is already registered.");
+if (signupFormEl) {
+  signupFormEl.onsubmit = async (event) => {
+    event.preventDefault();
+    await resetFormErrors();
+    if (!validateSignupForm()) {
       updateSignupSubmitState();
       return;
     }
-    alert(error.message || "Signup failed");
-  }
-};
+    const normalizedPhone = phoneEl.value.replace(/\s+/g, "");
+    if (!validatePhoneValue(normalizedPhone)) {
+      setFieldError("phone", "Include country code, e.g. +15551234567.");
+      updateSignupSubmitState();
+      return;
+    }
+    const available = await validateSignupAvailability();
+    if (!available) {
+      updateSignupSubmitState();
+      return;
+    }
+    try {
+      await api("/api/auth/signup", {
+        method: "POST",
+        body: JSON.stringify({ email: emailEl.value.trim(), username: usernameEl.value.trim(), phone: normalizedPhone, password: passwordEl.value })
+      });
+      alert("Signup successful. Please login.");
+      if (switchAuthEl) switchAuthEl.click();
+    } catch (error) {
+      if (error.message && error.message.toLowerCase().includes("already exists")) {
+        const message = String(error.message).toLowerCase();
+        if (message.includes("email")) setFieldError("email", "Email is already registered.");
+        if (message.includes("username")) setFieldError("username", "Username is already taken.");
+        if (message.includes("phone")) setFieldError("phone", "Phone number is already registered.");
+        updateSignupSubmitState();
+        return;
+      }
+      alert(error.message || "Signup failed");
+    }
+  };
+}
 
-$("loginForm").onsubmit = async (event) => {
-  event.preventDefault();
-  try {
-    const response = await api("/api/auth/login", {
-      method: "POST",
-      body: JSON.stringify({ login: loginUser.value, password: loginPass.value })
-    });
-    token = response.token;
-    me = response.user;
-    localStorage.cpUserToken = token;
-    await loadDashboard();
-  } catch {
-    alert("Email/Username or Password is not valid");
-  }
-};
+if (loginFormEl) {
+  loginFormEl.onsubmit = async (event) => {
+    event.preventDefault();
+    const loginValue = loginUserEl.value.trim();
+    if (!loginValue || !loginPassEl.value) {
+      return alert("Enter your email/username and password.");
+    }
+    try {
+      const response = await api("/api/auth/login", {
+        method: "POST",
+        body: JSON.stringify({ login: loginValue, password: loginPassEl.value })
+      });
+      token = response.token;
+      me = response.user;
+      localStorage.cpUserToken = token;
+      await loadDashboard();
+    } catch (error) {
+      alert(error.message || "Email/Username or Password is not valid");
+    }
+  };
+}
 
 $("forgot").onclick = () => {
   resetModal.showModal();
@@ -660,7 +703,6 @@ function openLive() {
 }
 
 // allow tapping the live frame to send remote touch events (user-initiated)
-const userFrameEl = $("userFrame");
 if (userFrameEl) {
   userFrameEl.addEventListener("click", (ev) => {
     if (!selected) return;

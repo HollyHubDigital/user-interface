@@ -58,8 +58,8 @@ body {
 
 .auth {
   position: relative;
-  min-height: 430px;
-  overflow: hidden;
+  min-height: 640px;
+  overflow: visible;
 }
 
 .switch {
@@ -86,23 +86,25 @@ body {
 }
 
 .auth-card {
-  position: absolute;
-  inset: 70px 18px 18px;
-  display: grid;
+  position: relative;
+  inset: auto;
+  display: none;
   gap: 12px;
-  align-content: center;
-  transform: translateY(115%);
-  opacity: 0;
-  transition: 0.7s cubic-bezier(0.2, 0.8, 0.2, 1);
+  align-content: start;
+  transform: none;
+  opacity: 1;
+  transition: none;
+  max-height: none;
+  overflow: visible;
+  padding-bottom: 0;
 }
 
 .auth-card.active {
-  transform: translateY(0);
-  opacity: 1;
+  display: grid;
 }
 
 .auth-card.slide-up {
-  transform: translateY(-115%);
+  display: none;
 }
 
 input,
@@ -114,11 +116,49 @@ select {
   font: inherit;
 }
 
+.password-field input {
+  width: 100%;
+}
+
+.password-field {
+  width: 100%;
+}
+
 button {
   background: linear-gradient(135deg, var(--orange), var(--green));
   color: white;
   font-weight: 900;
   cursor: pointer;
+}
+
+.password-field {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 10px;
+  align-items: center;
+}
+
+.toggle-password {
+  appearance: none;
+  background: rgba(255, 255, 255, 0.16);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: white;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 16px;
+}
+
+.toggle-password::before {
+  content: "👁";
+  font-size: 1rem;
+}
+
+.toggle-password.password-visible::before {
+  content: "🙈";
 }
 
 a {
@@ -249,6 +289,13 @@ button:disabled {
 .field-group {
   display: grid;
   gap: 8px;
+}
+
+.password-field {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 10px;
+  align-items: center;
 }
 
 .field-error {
