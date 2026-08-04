@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>CP DEVICE User Login</title>
+  <link rel="stylesheet" href="user.css" />
+</head>
+<body>
+  <main class="portal">
+    <header class="hero">
+      <img src="logo.png" alt="CP DEVICE logo" onerror="this.style.display='none'" />
+      <div>
+        <p>CP DEVICE</p>
+        <h1>User Portal Access</h1>
+      </div>
+    </header>
+
+    <section id="auth" class="glass auth">
+      <button id="switchAuth" class="switch">Signup</button>
+      <div id="authMessage" class="auth-message hidden" role="alert"></div>
+
+      <form id="loginForm" class="auth-card active">
+        <h2>Login</h2>
+        <input id="loginUser" placeholder="Email or Username" autocomplete="username" />
+        <div class="field-group password-field">
+          <input id="loginPass" type="password" placeholder="Password" autocomplete="current-password" />
+          <button type="button" class="toggle-password" data-toggle-password="loginPass" aria-label="Show password"></button>
+        </div>
+        <button>Login</button>
+        <a id="forgot">Forgot password?</a>
+      </form>
+
+      <form id="signupForm" class="auth-card">
+        <h2>Signup</h2>
+        <div class="field-group">
+          <input id="email" type="email" placeholder="Email" autocomplete="email" />
+          <div class="field-error" id="emailError"></div>
+        </div>
+        <div class="field-group">
+          <input id="username" placeholder="Username" autocomplete="username" />
+          <div class="field-error" id="usernameError"></div>
+        </div>
+        <div class="field-group">
+          <input id="phone" type="tel" inputmode="tel" pattern="^\+[1-9][0-9]{7,14}$" placeholder="Phone e.g. +15551234567" title="Include country code, e.g. +15551234567" required />
+          <div class="field-error" id="phoneError"></div>
+        </div>
+        <div class="field-group password-field">
+          <input id="password" type="password" placeholder="Password" autocomplete="new-password" />
+          <button type="button" class="toggle-password" data-toggle-password="password" aria-label="Show password"></button>
+          <div class="field-error" id="passwordError"></div>
+        </div>
+        <button type="submit">Sign up</button>
+      </form>
+    </section>
+
+    <dialog id="resetModal">
+      <form method="dialog" class="glass modal">
+        <h2>Reset Password</h2>
+        <div class="field-group">
+          <input id="resetLogin" placeholder="Email or Username" autocomplete="username" />
+          <div class="field-error" id="resetLoginError"></div>
+        </div>
+        <div class="field-group password-field">
+          <input id="currentPassword" type="password" placeholder="Current password" autocomplete="current-password" />
+          <button type="button" class="toggle-password" data-toggle-password="currentPassword" aria-label="Show password"></button>
+          <div class="field-error" id="currentPasswordError"></div>
+        </div>
+        <div class="field-group password-field">
+          <input id="newPassword" type="password" placeholder="New Password" autocomplete="new-password" />
+          <button type="button" class="toggle-password" data-toggle-password="newPassword" aria-label="Show password"></button>
+          <div class="field-error" id="newPasswordError"></div>
+        </div>
+        <div class="field-group password-field">
+          <input id="confirmNewPassword" type="password" placeholder="Confirm New Password" autocomplete="new-password" />
+          <button type="button" class="toggle-password" data-toggle-password="confirmNewPassword" aria-label="Show password"></button>
+          <div class="field-error" id="confirmNewPasswordError"></div>
+        </div>
+        <button id="saveReset" type="button">Save</button>
+        <button type="button" onclick="document.getElementById('resetModal').close();">Cancel</button>
+      </form>
+    </dialog>
+
+    <script src="config.js"></script>
+    <script src="user.js"></script>
+  </body>
+</html>

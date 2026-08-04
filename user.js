@@ -6,7 +6,7 @@ let livePollTimer = null;
 let pendingEnrollmentLink = localStorage.getItem("cpPendingEnrollmentLink") || "";
 let userCommands = [];
 
-const API_BASE = (window.CP_DEVICE_CONFIG && window.CP_DEVICE_CONFIG.API_BASE_URL) || "";
+const API_BASE = (window.CP_DEVICE_CONFIG && window.CP_DEVICE_CONFIG.API_BASE_URL) || window.location.origin;
 const $ = (id) => document.getElementById(id);
 const apiUrl = (path) => `${API_BASE}${path}`;
 
@@ -41,6 +41,35 @@ const logoutUserEl = $("logoutUser");
 const locationModalEl = $("locationModal");
 const locationTextEl = $("locationText");
 const locationMapLinkEl = $("locationMapLink");
+const authPage = Boolean($("auth"));
+const dashboardPage = Boolean($("dashboard"));
+const authMessageEl = $("authMessage");
+
+function redirectToAuth(message) {
+  if (message) localStorage.setItem("cpUserAuthMessage", message);
+  if (window.location.pathname.endsWith("auth.html")) return;
+  window.location.href = "auth.html";
+}
+
+function showAuthFlashMessage() {
+  if (!authMessageEl) return;
+  const message = localStorage.getItem("cpUserAuthMessage");
+  if (!message) return;
+  authMessageEl.textContent = message;
+  authMessageEl.classList.remove("hidden");
+  localStorage.removeItem("cpUserAuthMessage");
+}
+
+function clearAuthFlashMessage() {
+  if (!authMessageEl) return;
+  authMessageEl.textContent = "";
+  authMessageEl.classList.add("hidden");
+}
+
+function redirectToDashboard() {
+  if (window.location.pathname.endsWith("index.html") || window.location.pathname === "/") return;
+  window.location.href = "index.html";
+}
 
 const signupFields = ["email", "username", "phone", "password"];
 const signupErrors = {
@@ -97,7 +126,10 @@ async function api(path, options = {}) {
 }
 
 function show(sectionId) {
-  ["auth", "dashboard", "subscriptions", "checkout"].forEach((id) => $(id).classList.toggle("hidden", id !== sectionId));
+  ["auth", "dashboard", "subscriptions", "checkout"].forEach((id) => {
+    const element = $(id);
+    if (element) element.classList.toggle("hidden", id !== sectionId);
+  });
 }
 
 function clearFieldErrors(errors) {
@@ -249,15 +281,17 @@ function clearSession() {
   if ($("loginPass")) $("loginPass").value = "";
 }
 
-async function restoreSession() {
-  if (!token) return;
+async function tryRestoreSession() {
+  if (!token) return false;
   try {
     const response = await api("/api/auth/me");
     me = response.user;
     localStorage.setItem("cpUserToken", token);
-    await loadDashboard();
+    return true;
   } catch {
+    localStorage.setItem("cpUserAuthMessage", "Session expired or invalid. Please login again.");
     clearSession();
+    return false;
   }
 }
 
@@ -367,6 +401,7 @@ if (loginFormEl) {
       me = response.user;
       localStorage.cpUserToken = token;
       await loadDashboard();
+      redirectToDashboard();
     } catch (error) {
       alert(error.message || "Email/Username or Password is not valid");
     }
@@ -759,11 +794,28 @@ if (logoutUser) logoutUser.onclick = () => {
   if (livePollTimer) clearInterval(livePollTimer);
   try { api("/api/auth/logout", { method: "POST" }).catch(() => {}); } catch {};
   clearSession();
+  if (dashboardPage) redirectToAuth();
 };
 
-if (token) {
-  restoreSession();
+async function initUserApp() {
+  if (authPage) {
+    initializeUserInterface();
+    showAuthFlashMessage();
+    if (token && await tryRestoreSession()) {
+      redirectToDashboard();
+    }
+    return;
+  }
+  if (dashboardPage) {
+    if (!token || !(await tryRestoreSession())) {
+      redirectToAuth();
+      return;
+    }
+    await loadDashboard();
+  }
 }
+
+initUserApp();
 
 
 

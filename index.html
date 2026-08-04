@@ -46,40 +46,6 @@
         </div>
       </header>
 
-      <section id="auth" class="glass auth">
-        <button id="switchAuth" class="switch">Signup</button>
-
-        <form id="loginForm" class="auth-card active">
-          <h2>Login</h2>
-          <input id="loginUser" placeholder="Email or Username" />
-          <div class="password-field"><input id="loginPass" type="password" placeholder="Password" /><button type="button" class="toggle-password" data-toggle-password="loginPass" aria-label="Show password"><span class="eye-icon" aria-hidden="true"></span></button></div>
-          <button>Login</button>
-          <a id="forgot">Forgot password?</a>
-        </form>
-
-        <form id="signupForm" class="auth-card">
-          <h2>Signup</h2>
-          <div class="field-group">
-            <input id="email" type="email" placeholder="Email" />
-            <div class="field-error" id="emailError"></div>
-          </div>
-          <div class="field-group">
-            <input id="username" placeholder="Username" />
-            <div class="field-error" id="usernameError"></div>
-          </div>
-          <div class="field-group">
-            <input id="phone" type="tel" inputmode="tel" pattern="^\+[1-9][0-9]{7,14}$" placeholder="Phone e.g. +1 5551234567" title="Include country code, e.g. +15551234567" required />
-            <div class="field-error" id="phoneError"></div>
-          </div>
-          <div class="field-group password-field">
-            <input id="password" type="password" placeholder="Password" />
-            <button type="button" class="toggle-password" data-toggle-password="password" aria-label="Show password"><span class="eye-icon" aria-hidden="true"></span></button>
-            <div class="field-error" id="passwordError"></div>
-          </div>
-          <button type="submit">Sign up</button>
-        </form>
-      </section>
-
       <section id="dashboard" class="dash hidden">
         <div class="dashboard-top"><button id="logoutUser" class="secondary" type="button">Logout</button></div>
         <div class="glass">
@@ -150,34 +116,6 @@
           <pre id="checkoutStatus"></pre>
         </div>
       </section>    </main>
-
-    <dialog id="resetModal">
-      <form method="dialog" class="glass modal">
-        <h2>Reset Password</h2>
-        <div class="field-group">
-          <input id="resetLogin" placeholder="Email or Username" />
-          <div class="field-error" id="resetLoginError"></div>
-        </div>
-        <div class="field-group password-field">
-          <input id="currentPassword" type="password" placeholder="Current password" />
-          <button type="button" class="toggle-password" data-toggle-password="currentPassword" aria-label="Show password"><span class="eye-icon" aria-hidden="true"></span></button>
-          <div class="field-error" id="currentPasswordError"></div>
-        </div>
-        <div class="field-group password-field">
-          <input id="newPassword" type="password" placeholder="New Password" />
-          <button type="button" class="toggle-password" data-toggle-password="newPassword" aria-label="Show password"><span class="eye-icon" aria-hidden="true"></span></button>
-          <div class="field-error" id="newPasswordError"></div>
-        </div>
-        <div class="field-group password-field">
-          <input id="confirmNewPassword" type="password" placeholder="Confirm New Password" />
-          <button type="button" class="toggle-password" data-toggle-password="confirmNewPassword" aria-label="Show password"><span class="eye-icon" aria-hidden="true"></span></button>
-          <div class="field-error" id="confirmNewPasswordError"></div>
-        </div>
-        <button id="saveReset" type="button">Save</button>
-        <button>Cancel</button>
-      </form>
-    </dialog>
-
 
     <dialog id="locationModal">
       <form method="dialog" class="glass modal">

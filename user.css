@@ -140,16 +140,16 @@ button {
 
 .toggle-password {
   appearance: none;
-  background: rgba(255, 255, 255, 0.16);
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: transparent;
+  border: none;
   color: white;
-  min-width: 44px;
-  min-height: 44px;
+  min-width: 40px;
+  min-height: 40px;
   padding: 0;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border-radius: 16px;
+  border-radius: 999px;
 }
 
 .toggle-password::before {
