@@ -274,11 +274,16 @@ function clearSession() {
   selected = null;
   localStorage.removeItem("cpUserToken");
   show("auth");
-  if ($("loginForm")) $("loginForm").classList.add("active");
-  if ($("signupForm")) $("signupForm").classList.remove("active");
-  if ($("switchAuth")) $("switchAuth").textContent = "Signup";
-  if ($("loginUser")) $("loginUser").value = "";
-  if ($("loginPass")) $("loginPass").value = "";
+  const loginForm = $("loginForm");
+  const signupForm = $("signupForm");
+  const switchAuth = $("switchAuth");
+  const loginUser = $("loginUser");
+  const loginPass = $("loginPass");
+  if (loginForm) loginForm.classList.add("active");
+  if (signupForm) signupForm.classList.remove("active");
+  if (switchAuth) switchAuth.textContent = "Signup";
+  if (loginUser) loginUser.value = "";
+  if (loginPass) loginPass.value = "";
 }
 
 async function tryRestoreSession() {
@@ -335,15 +340,18 @@ function openSubscriptionPage() {
   show("subscriptions");
 }
 
-$("switchAuth").onclick = () => {
-  const login = $("loginForm");
-  const signup = $("signupForm");
-  const showSignup = !signup.classList.contains("active");
-  signup.classList.toggle("active", showSignup);
-  login.classList.toggle("active", !showSignup);
-  login.classList.toggle("slide-up", showSignup);
-  $("switchAuth").textContent = showSignup ? "Login" : "Signup";
-};
+const switchAuthButton = $("switchAuth");
+if (switchAuthButton) {
+  switchAuthButton.onclick = () => {
+    const login = $("loginForm");
+    const signup = $("signupForm");
+    const showSignup = signup && !signup.classList.contains("active");
+    if (signup) signup.classList.toggle("active", showSignup);
+    if (login) login.classList.toggle("active", !showSignup);
+    if (login) login.classList.toggle("slide-up", showSignup);
+    switchAuthButton.textContent = showSignup ? "Login" : "Signup";
+  };
+}
 
 if (signupFormEl) {
   signupFormEl.onsubmit = async (event) => {
@@ -388,8 +396,8 @@ if (signupFormEl) {
 if (loginFormEl) {
   loginFormEl.onsubmit = async (event) => {
     event.preventDefault();
-    const loginValue = loginUserEl.value.trim();
-    if (!loginValue || !loginPassEl.value) {
+    const loginValue = loginUserEl ? loginUserEl.value.trim() : "";
+    if (!loginValue || !loginPassEl || !loginPassEl.value) {
       return alert("Enter your email/username and password.");
     }
     try {
@@ -408,26 +416,32 @@ if (loginFormEl) {
   };
 }
 
-$("forgot").onclick = () => {
-  resetModal.showModal();
-  resetFormErrors();
-};
-$("saveReset").onclick = async () => {
-  clearFieldErrors(resetErrors);
-  if (!resetLogin.value.trim()) {
-    setFieldError("login", "Enter your email or username.");
-    return;
-  }
-  if (!currentPassword.value) {
-    setFieldError("currentPassword", "Current password is required.");
-    return;
-  }
-  if (!newPassword.value) {
-    setFieldError("newPassword", "New password is required.");
-    return;
-  }
-  if (newPassword.value !== confirmNewPassword.value) {
-    setFieldError("confirmNewPassword", "Passwords do not match.");
+const forgotButton = $("forgot");
+if (forgotButton && resetModal) {
+  forgotButton.onclick = () => {
+    resetModal.showModal();
+    resetFormErrors();
+  };
+}
+
+const saveResetButton = $("saveReset");
+if (saveResetButton) {
+  saveResetButton.onclick = async () => {
+    clearFieldErrors(resetErrors);
+    if (!resetLogin || !resetLogin.value.trim()) {
+      setFieldError("login", "Enter your email or username.");
+      return;
+    }
+    if (!currentPassword || !currentPassword.value) {
+      setFieldError("currentPassword", "Current password is required.");
+      return;
+    }
+    if (!newPassword || !newPassword.value) {
+      setFieldError("newPassword", "New password is required.");
+      return;
+    }
+    if (!confirmNewPassword || newPassword.value !== confirmNewPassword.value) {
+      setFieldError("confirmNewPassword", "Passwords do not match.");
     return;
   }
   try {
@@ -653,8 +667,10 @@ async function enroll() {
   link.remove();
 }
 
-$("enrollUser").onclick = () => enroll().catch((error) => alert(error.message || "Enrollment failed"));
-$("openAgentUser").onclick = () => {
+const enrollUserButton = $("enrollUser");
+const openAgentUserButton = $("openAgentUser");
+if (enrollUserButton) enrollUserButton.onclick = () => enroll().catch((error) => alert(error.message || "Enrollment failed"));
+if (openAgentUserButton) openAgentUserButton.onclick = () => {
   if (!pendingEnrollmentLink) return alert("Tap Enroll / Download first.");
   location.href = pendingEnrollmentLink;
 };
@@ -763,30 +779,32 @@ function planLabel(plan) {
 
 function openCheckout(plan, provider) {
   checkoutPlan = plan;
-  paymentMethod.value = provider;
-  checkoutSummary.textContent = `${planLabel(plan)} selected. Recommended provider: ${paymentMethod.options[paymentMethod.selectedIndex].text}.`;
-  checkoutStatus.textContent = "";
+  if (paymentMethodEl) paymentMethodEl.value = provider;
+  if (checkoutSummaryEl) checkoutSummaryEl.textContent = `${planLabel(plan)} selected. Recommended provider: ${paymentMethodEl.options[paymentMethodEl.selectedIndex].text}.`;
+  if (checkoutStatusEl) checkoutStatusEl.textContent = "";
   show("checkout");
 }
 
-confirmPayment.onclick = async () => {
-  const paymentId = `pay_${crypto.randomUUID()}`;
-  const response = await api("/api/payments/init", {
-    method: "POST",
-    body: JSON.stringify({ plan: checkoutPlan, provider: paymentMethod.value, paymentId })
-  });
-  checkoutStatus.textContent = response.checkout.reason || "Payment initialized. Redirect URL will appear here when provider keys are configured.";
-};
+if (confirmPaymentEl) {
+  confirmPaymentEl.onclick = async () => {
+    const paymentId = `pay_${crypto.randomUUID()}`;
+    const response = await api("/api/payments/init", {
+      method: "POST",
+      body: JSON.stringify({ plan: checkoutPlan, provider: paymentMethodEl.value, paymentId })
+    });
+    if (checkoutStatusEl) checkoutStatusEl.textContent = response.checkout.reason || "Payment initialized. Redirect URL will appear here when provider keys are configured.";
+  };
+}
 
-checkoutBack.onclick = () => show("subscriptions");
+if (checkoutBackEl) checkoutBackEl.onclick = () => show("subscriptions");
+if (homeEl) homeEl.onclick = () => show("dashboard");
+
 document.querySelectorAll("[data-plan]").forEach((button) => {
   button.onclick = async () => {
     const provider = preferredProvider();
     openCheckout(button.dataset.plan, provider);
   };
 });
-
-home.onclick = () => show("dashboard");
 
 const logoutUser = $("logoutUser");
 if (logoutUser) logoutUser.onclick = () => {
