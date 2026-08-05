@@ -418,3 +418,10 @@ img:not([src]), img[src=""] {
 .remove-device { margin-top: 8px; padding: 8px 10px; background: #7a2020; }
 .file-row span { display: grid; gap: 3px; }
 .file-row small { color: #ffd19b; word-break: break-all; }
+
+.record-actions { display: flex; align-items: center; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+.record-actions button { width: 38px; min-width: 38px; padding: 10px 0; font-size: 16px; }
+.record-start { background: linear-gradient(135deg, #1fa047, #467434); }
+.record-stop { background: linear-gradient(135deg, #b91c1c, #ef4444); }
+.record-save { background: linear-gradient(135deg, #467434, #F58F20); }
+#userRecordingStatus { color: rgba(255,255,255,.72); font-size: 12px; }
