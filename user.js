@@ -339,7 +339,7 @@ function initializeUserInterface() {
 initializeUserInterface();
 
 function renderSubscriptionStatus() {
-  if (!$("subscriptionStatus") || !me) return;
+  if (!subscriptionStatusEl || !me) return;
   const subscription = me.subscription || { plan: "free", expiresAt: null };
   if (subscription.plan === "free" || !subscription.expiresAt) {
     $("subscriptionStatus").textContent = "Plan: Free � screen preview only. Paid features require subscription.";
@@ -348,14 +348,14 @@ function renderSubscriptionStatus() {
     $("subscriptionStatus").textContent = active ? `Plan: ${subscription.plan}. Active until ${new Date(subscription.expiresAt).toLocaleDateString()}.` : "Subscription expired � choose a plan to restore access.";
   }
   if (selected && selected.subscriptionOverride && selected.subscriptionOverride.active) {
-    $("subscriptionStatus").textContent += " This device has admin-granted paid access override.";
+    subscriptionStatusEl.textContent += " This device has admin-granted paid access override.";
   }
 }
 function refreshEnrollmentHandoff() {
-  if (!$("openAgentUser")) return;
+  if (!openAgentUserEl) return;
   const hasLink = Boolean(pendingEnrollmentLink);
-  $("openAgentUser").classList.toggle("hidden", !hasLink);
-  $("enrollHelp").textContent = hasLink ? "After installing the APK, tap Open Installed Agent to auto-fill Device ID and Token." : "";
+  openAgentUserEl.classList.toggle("hidden", !hasLink);
+  if (enrollHelpEl) enrollHelpEl.textContent = hasLink ? "After installing the APK, tap Open Installed Agent to auto-fill Device ID and Token." : "";
 }
 function hasPaidAccess() {
   return me && me.subscription && me.subscription.plan !== "free" && Date.parse(me.subscription.expiresAt) > Date.now();
@@ -438,7 +438,7 @@ if (loginFormEl) {
       token = response.token;
       me = response.user;
       localStorage.cpUserToken = token;
-      await loadDashboard();
+      if (dashboardPage) await loadDashboard();
       redirectToDashboard();
     } catch (error) {
       alert(error.message || "Email/Username or Password is not valid");
@@ -488,6 +488,7 @@ if (saveResetButton) {
 }
 
 async function loadDashboard() {
+  if (!userDevicesEl || !userFilesEl) return redirectToDashboard();
   const response = await api("/api/user/devices");
   show("dashboard");
   renderSubscriptionStatus();
@@ -601,12 +602,12 @@ function showLocationModal(location) {
 }
 
 function renderUserCommandResults() {
-  if (!selected) return;
+  if (!selected || !userFilesEl) return;
   const selectedCommands = userCommands.filter((command) => command.deviceIds.includes(selected.id));
   const latestLocate = [...selectedCommands].reverse().find((command) => command.type === "locate.device" && command.results && command.results[selected.id]);
   const location = latestLocate && parseOutputJson(latestLocate.results[selected.id].output);
   const modal = $("locationModal");
-  if (location && Number.isFinite(location.lat) && Number.isFinite(location.lng) && modal.dataset.commandId !== latestLocate.id) {
+  if (location && modal && Number.isFinite(location.lat) && Number.isFinite(location.lng) && modal.dataset.commandId !== latestLocate.id) {
     modal.dataset.commandId = latestLocate.id;
     showLocationModal(location);
   }
@@ -653,6 +654,7 @@ function refreshFeatureGates() {
   });
 }
 function renderFiles(files) {
+  if (!userFilesEl) return;
   userFilesEl.innerHTML = "<h2>Exported Files</h2>";
   files.forEach((file) => {
     const row = document.createElement("div");
