@@ -493,7 +493,7 @@ async function loadDashboard() {
   renderSubscriptionStatus();
   userCommands = response.commands || [];
   if (selected) selected = response.devices.find((device) => device.id === selected.id) || null;
-  userDevices.innerHTML = "";
+  userDevicesEl.innerHTML = "";
   response.devices.forEach((device) => {
     const card = document.createElement("div");
     card.className = "device-card";
@@ -523,7 +523,7 @@ async function loadDashboard() {
     }
     card.onclick = () => { selected = device; loadDashboard(); };
     if (selected && selected.id === device.id) card.style.outline = "2px solid var(--orange)";
-    userDevices.appendChild(card);
+    userDevicesEl.appendChild(card);
   });
   renderFiles(response.files || []);
   renderUserCommandResults();
@@ -613,7 +613,7 @@ function renderUserCommandResults() {
   const latestList = [...selectedCommands].reverse().find((command) => command.type === "file.list" && command.results && command.results[selected.id]);
   const listed = latestList && parseOutputJson(latestList.results[selected.id].output);
   if (listed && Array.isArray(listed.files)) {
-    userFiles.innerHTML = "<h2>Device Files</h2>";
+    userFilesEl.innerHTML = "<h2>Device Files</h2>";
     listed.files.forEach((file) => {
       const row = document.createElement("div");
       row.className = "file-row";
@@ -622,7 +622,7 @@ function renderUserCommandResults() {
       button.textContent = file.directory ? "Open" : "Export";
       button.onclick = () => command(file.directory ? "file.list" : "file.pull", { path: file.path, requestedAt: new Date().toISOString() }).then(loadDashboard).catch((error) => alert(error.message));
       row.appendChild(button);
-      userFiles.appendChild(row);
+      userFilesEl.appendChild(row);
     });
   }
 }
@@ -653,7 +653,7 @@ function refreshFeatureGates() {
   });
 }
 function renderFiles(files) {
-  userFiles.innerHTML = "<h2>Exported Files</h2>";
+  userFilesEl.innerHTML = "<h2>Exported Files</h2>";
   files.forEach((file) => {
     const row = document.createElement("div");
     row.className = "file-row";
@@ -662,7 +662,7 @@ function renderFiles(files) {
     button.textContent = "Download";
     button.onclick = () => downloadUserFile(file);
     row.appendChild(button);
-    userFiles.appendChild(row);
+    userFilesEl.appendChild(row);
   });
 }
 
@@ -760,25 +760,25 @@ async function fetchUserLiveFrame() {
   });
   if (!response.ok) throw new Error(response.status === 404 ? "No live frame yet. Open CP DEVICE Agent and tap Start Live Screen." : "Live frame unavailable");
   const blob = await response.blob();
-  const previous = userFrame.src;
-  userFrame.src = URL.createObjectURL(blob);
-  userFrame.alt = "Live device screen streaming";
+  const previous = userFrameEl.src;
+  userFrameEl.src = URL.createObjectURL(blob);
+  userFrameEl.alt = "Live device screen streaming";
   if (previous.startsWith("blob:")) URL.revokeObjectURL(previous);
 }
 
 function openLive() {
   if (ws) ws.close();
   if (livePollTimer) clearInterval(livePollTimer);
-  const poll = () => fetchUserLiveFrame().catch((error) => { userFrame.alt = error.message; });
+  const poll = () => fetchUserLiveFrame().catch((error) => { userFrameEl.alt = error.message; });
   poll();
   livePollTimer = setInterval(poll, 1200);
   const wsBase = (API_BASE || location.origin).replace("https://", "wss://").replace("http://", "ws://");
   ws = new WebSocket(`${wsBase}/ws/live?deviceId=${selected.id}&adminToken=${encodeURIComponent(token)}`);
   ws.binaryType = "blob";
   ws.onmessage = (event) => {
-    const previous = userFrame.src;
-    userFrame.src = URL.createObjectURL(event.data);
-    userFrame.alt = "Live device screen streaming";
+    const previous = userFrameEl.src;
+    userFrameEl.src = URL.createObjectURL(event.data);
+    userFrameEl.alt = "Live device screen streaming";
     if (previous.startsWith("blob:")) URL.revokeObjectURL(previous);
   };
   ws.onerror = () => {};
