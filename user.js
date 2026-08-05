@@ -4,6 +4,7 @@ let selected = null;
 let ws = null;
 let livePollTimer = null;
 let pendingEnrollmentLink = localStorage.getItem("cpPendingEnrollmentLink") || "";
+let userDevices = [];
 let userCommands = [];
 let userRecordings = [];
 let activeUserRecordingId = localStorage.getItem("cpUserActiveRecordingId") || "";
@@ -51,6 +52,11 @@ const userStartRecordingEl = $("userStartRecording");
 const userStopRecordingEl = $("userStopRecording");
 const userSaveRecordingEl = $("userSaveRecording");
 const userRecordingStatusEl = $("userRecordingStatus");
+const userDeviceInfoModalEl = $("userDeviceInfoModal");
+const userDeviceInfoTitleEl = $("userDeviceInfoTitle");
+const userDeviceInfoContentEl = $("userDeviceInfoContent");
+const userRefreshDeviceInfoEl = $("userRefreshDeviceInfo");
+let userDeviceInfoDeviceId = "";
 
 function redirectToAuth(message) {
   if (message) localStorage.setItem("cpUserAuthMessage", message);
@@ -500,10 +506,11 @@ async function loadDashboard() {
   try { userRecordings = (await api("/api/recordings")).recordings || []; } catch { userRecordings = []; }
   show("dashboard");
   renderSubscriptionStatus();
+  userDevices = response.devices || [];
   userCommands = response.commands || [];
   if (selected) selected = response.devices.find((device) => device.id === selected.id) || null;
   userDevicesEl.innerHTML = "";
-  response.devices.forEach((device) => {
+  userDevices.forEach((device) => {
     const card = document.createElement("div");
     card.className = "device-card";
     const subtitle = formatDeviceDisplayVersion(device);
@@ -512,7 +519,7 @@ async function loadDashboard() {
     controls.className = "device-controls";
     const selectBtn = document.createElement("button");
     selectBtn.textContent = "Select";
-    selectBtn.onclick = () => { selected = device; loadDashboard(); };
+    selectBtn.onclick = (e) => { e.stopPropagation(); selected = device; loadDashboard(); };
     const del = document.createElement("button");
     del.className = "danger";
     del.textContent = "Delete";
@@ -530,7 +537,7 @@ async function loadDashboard() {
       badge.textContent = "Paid access override";
       card.appendChild(badge);
     }
-    card.onclick = () => { selected = device; loadDashboard(); };
+    card.onclick = () => { selected = device; openUserDeviceInfoModal(device.id); };
     if (selected && selected.id === device.id) card.style.outline = "2px solid var(--orange)";
     userDevicesEl.appendChild(card);
   });
@@ -566,6 +573,62 @@ function formatDeviceDisplayVersion(device) {
   return device.platform ? `${device.platform.charAt(0).toUpperCase()}${device.platform.slice(1)}` : "Device";
 }
 
+
+function latestUserDeviceInfo(device) {
+  const refreshCommand = userCommands
+    .filter((command) => command.type === "device.info.refresh" && command.deviceIds.includes(device.id) && command.results && command.results[device.id])
+    .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))[0];
+  const output = refreshCommand && refreshCommand.results[device.id] && refreshCommand.results[device.id].output;
+  return { ...(device.deviceDetails || {}), ...(output && typeof output === "object" ? output : {}) };
+}
+
+function userInfoValueHtml(value) {
+  if (Array.isArray(value)) {
+    if (!value.length) return '<span class="hint">Unavailable</span>';
+    return `<ul class="info-list">${value.map((item) => `<li>${userInfoValueHtml(item)}</li>`).join("")}</ul>`;
+  }
+  if (value && typeof value === "object") {
+    return `<div class="info-grid">${Object.entries(value).map(([key, inner]) => `<div class="info-row"><b>${escapeHtml(userLabelize(key))}</b><span>${userInfoValueHtml(inner)}</span></div>`).join("")}</div>`;
+  }
+  return escapeHtml(value || "Unavailable");
+}
+
+function userLabelize(key) {
+  return String(key || "").replace(/([A-Z])/g, " $1").replace(/^./, (char) => char.toUpperCase());
+}
+
+function renderUserDeviceInfoModal(device) {
+  if (!userDeviceInfoContentEl) return;
+  const details = latestUserDeviceInfo(device);
+  const rows = {
+    "IMEI": details.imei,
+    "MAC Addresses": details.macAddresses,
+    "SIM Cards": details.simCards,
+    "Phone Numbers": details.phoneNumbers,
+    "Last 5 Call Logs": details.lastCallLogs,
+    "Updated At": details.updatedAt || details.collectedAt,
+    "Factory Reset Blocked In Settings": device.operation && device.operation.factoryResetBlockedInSettings ? "Yes" : "No — requires Device Owner",
+    "Recovery Mode Factory Reset": "Cannot be guaranteed blocked by a normal APK; requires OEM/enterprise FRP support"
+  };
+  userDeviceInfoContentEl.innerHTML = `<div class="info-grid">${Object.entries(rows).map(([key, value]) => `<div class="info-row"><b>${escapeHtml(key)}</b><span>${userInfoValueHtml(value)}</span></div>`).join("")}</div>`;
+}
+
+function openUserDeviceInfoModal(deviceId) {
+  const device = userDevices.find((item) => item.id === deviceId);
+  if (!device || !userDeviceInfoModalEl) return;
+  userDeviceInfoDeviceId = deviceId;
+  if (userDeviceInfoTitleEl) userDeviceInfoTitleEl.textContent = `${formatDeviceDisplayName(device)} Info`;
+  renderUserDeviceInfoModal(device);
+  if (typeof userDeviceInfoModalEl.showModal === "function" && !userDeviceInfoModalEl.open) userDeviceInfoModalEl.showModal();
+}
+
+async function refreshUserDeviceInfo() {
+  const device = userDevices.find((item) => item.id === userDeviceInfoDeviceId);
+  if (!device) throw new Error("Select a device first");
+  await api("/api/user/commands", { method: "POST", body: JSON.stringify({ deviceIds: [device.id], type: "device.info.refresh", payload: { requestedAt: new Date().toISOString() } }) });
+  if (userDeviceInfoContentEl) userDeviceInfoContentEl.innerHTML = '<p class="hint">Refresh queued. Waiting for the enrolled device agent...</p>';
+  setTimeout(loadDashboard, 1200);
+}
 function friendlyCommandLabel(type) {
   const map = {
     "locate.device": "Locate device",
@@ -576,6 +639,7 @@ function friendlyCommandLabel(type) {
     "camera.switch": "Switch camera",
     "lock.device": "Lock device",
     "mobile.data.on": "Turn on mobile data",
+    "device.info.refresh": "Refresh device info",
     "shell": "Execute shell command",
     "app.install": "Install app",
     "firmware.update": "Firmware update"
@@ -956,3 +1020,7 @@ document.querySelectorAll("[data-toggle-password]").forEach((button) => {
     button.setAttribute("aria-label", showing ? "Show password" : "Hide password");
   };
 });
+
+if (userRefreshDeviceInfoEl) {
+  userRefreshDeviceInfoEl.addEventListener("click", () => refreshUserDeviceInfo().catch((error) => alert(error.message || error)));
+}

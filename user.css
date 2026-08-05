@@ -425,3 +425,11 @@ img:not([src]), img[src=""] {
 .record-stop { background: linear-gradient(135deg, #b91c1c, #ef4444); }
 .record-save { background: linear-gradient(135deg, #467434, #F58F20); }
 #userRecordingStatus { color: rgba(255,255,255,.72); font-size: 12px; }
+
+.device-info-modal { width: min(760px, 96vw); }
+.device-info-content { display: grid; gap: 10px; max-height: 70vh; overflow: auto; }
+.info-grid { display: grid; gap: 8px; }
+.info-row { display: grid; grid-template-columns: minmax(130px, 190px) 1fr; gap: 10px; padding: 8px; border: 1px solid rgba(255,255,255,.12); border-radius: 10px; background: rgba(0,0,0,.18); }
+.info-row b { opacity: .75; }
+.info-list { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.info-list li { padding: 8px; border: 1px solid rgba(255,255,255,.12); border-radius: 10px; background: rgba(0,0,0,.16); }

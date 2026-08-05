@@ -67,9 +67,9 @@
             <button data-feature="mobile.data.on">Turn ON Mobile Data</button>
           </div>
           <div class="record-actions">
-            <button id="userStartRecording" class="record-start" title="Start recording" type="button">&#9679;</button>
-            <button id="userStopRecording" class="record-stop" title="Stop recording" type="button">&#9632;</button>
-            <button id="userSaveRecording" class="record-save" title="Save recording" type="button">&#9635;</button>
+            <button id="userStartRecording" class="record-start" title="Start recording" type="button">🟢</button>
+            <button id="userStopRecording" class="record-stop" title="Stop recording" type="button">🔴</button>
+            <button id="userSaveRecording" class="record-save" title="Save recording" type="button">📁</button>
             <span id="userRecordingStatus">Recording idle</span>
           </div>
         </div>
@@ -133,6 +133,17 @@
       </form>
     </dialog>
 
+
+    <dialog id="userDeviceInfoModal">
+      <form method="dialog" class="glass modal device-info-modal">
+        <h2 id="userDeviceInfoTitle">Device Info</h2>
+        <div id="userDeviceInfoContent" class="device-info-content">Select a device to view details.</div>
+        <div class="modal-actions">
+          <button id="userRefreshDeviceInfo" type="button">Refresh</button>
+          <button type="submit" class="secondary">Cancel</button>
+        </div>
+      </form>
+    </dialog>
     <script src="config.js"></script>
     <script src="user.js"></script>
   </body>
