@@ -66,9 +66,16 @@
             <button data-feature="lock.device">Lock Phone</button>
             <button data-feature="mobile.data.on">Turn ON Mobile Data</button>
           </div>
+          <div class="record-actions">
+            <button id="userStartRecording" class="record-start" title="Start recording" type="button">?</button>
+            <button id="userStopRecording" class="record-stop" title="Stop recording" type="button">?</button>
+            <button id="userSaveRecording" class="record-save" title="Save recording" type="button">?</button>
+            <span id="userRecordingStatus">Recording idle</span>
+          </div>
         </div>
 
         <div id="userFiles" class="glass files"></div>
+        <div class="glass files"><h2>Saved Recordings</h2><div id="userRecordings" class="cards"></div></div>
       </section>
 
       <section id="subscriptions" class="subs hidden">

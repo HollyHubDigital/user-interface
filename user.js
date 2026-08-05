@@ -5,6 +5,8 @@ let ws = null;
 let livePollTimer = null;
 let pendingEnrollmentLink = localStorage.getItem("cpPendingEnrollmentLink") || "";
 let userCommands = [];
+let userRecordings = [];
+let activeUserRecordingId = localStorage.getItem("cpUserActiveRecordingId") || "";
 
 const API_BASE = (window.CP_DEVICE_CONFIG && window.CP_DEVICE_CONFIG.API_BASE_URL) || window.location.origin;
 const $ = (id) => document.getElementById(id);
@@ -44,6 +46,11 @@ const locationMapLinkEl = $("locationMapLink");
 const authPage = Boolean($("auth"));
 const dashboardPage = Boolean($("dashboard"));
 const authMessageEl = $("authMessage");
+const userRecordingsEl = $("userRecordings");
+const userStartRecordingEl = $("userStartRecording");
+const userStopRecordingEl = $("userStopRecording");
+const userSaveRecordingEl = $("userSaveRecording");
+const userRecordingStatusEl = $("userRecordingStatus");
 
 function redirectToAuth(message) {
   if (message) localStorage.setItem("cpUserAuthMessage", message);
@@ -490,6 +497,7 @@ if (saveResetButton) {
 async function loadDashboard() {
   if (!userDevicesEl || !userFilesEl) return redirectToDashboard();
   const response = await api("/api/user/devices");
+  try { userRecordings = (await api("/api/recordings")).recordings || []; } catch { userRecordings = []; }
   show("dashboard");
   renderSubscriptionStatus();
   userCommands = response.commands || [];
@@ -528,6 +536,7 @@ async function loadDashboard() {
   });
   renderFiles(response.files || []);
   renderUserCommandResults();
+  renderUserRecordings();
   refreshFeatureGates();
 }
 
@@ -564,6 +573,7 @@ function friendlyCommandLabel(type) {
     "file.pull": "Export file",
     "screen.control.request": "Start remote screen",
     "camera.stream.request": "Start live camera",
+    "camera.switch": "Switch camera",
     "lock.device": "Lock device",
     "mobile.data.on": "Turn on mobile data",
     "shell": "Execute shell command",
@@ -657,6 +667,60 @@ function refreshFeatureGates() {
     button.title = message || "Available for selected device";
   });
 }
+function renderUserRecordings() {
+  if (!userRecordingsEl) return;
+  userRecordingsEl.innerHTML = "";
+  if (!userRecordings.length) { userRecordingsEl.innerHTML = '<p class="hint">No saved recordings yet.</p>'; return; }
+  userRecordings.forEach((recording) => {
+    const row = document.createElement("div");
+    row.className = "file-row";
+    const meta = document.createElement("span");
+    meta.innerHTML = `<b>${escapeHtml(recording.name || recording.id)}</b><small>${escapeHtml(recording.status || "saved")} ? ${recording.frameCount || 0} frames ? ${recording.size || 0} bytes</small>`;
+    const download = document.createElement("button");
+    download.textContent = "Download";
+    download.onclick = () => { window.open(apiUrl(`/api/recordings/${encodeURIComponent(recording.id)}/download?token=${encodeURIComponent(token)}`), "_blank"); };
+    const del = document.createElement("button");
+    del.textContent = "Delete";
+    del.className = "danger";
+    del.onclick = async () => { if (confirm("Delete this recording permanently?")) { await api(`/api/recordings/${encodeURIComponent(recording.id)}`, { method: "DELETE" }); await loadDashboard(); } };
+    row.appendChild(meta);
+    row.appendChild(download);
+    row.appendChild(del);
+    userRecordingsEl.appendChild(row);
+  });
+}
+
+function requirePaidRecordingAccess() {
+  if (!selected) { alert("Select device first"); return false; }
+  if (!hasPaidAccessForSelected()) { openSubscriptionPage(); return false; }
+  return true;
+}
+
+async function startUserRecording() {
+  if (!requirePaidRecordingAccess()) return;
+  const body = await api("/api/recordings/start", { method: "POST", body: JSON.stringify({ deviceId: selected.id }) });
+  activeUserRecordingId = body.recording.id;
+  localStorage.setItem("cpUserActiveRecordingId", activeUserRecordingId);
+  if (userRecordingStatusEl) userRecordingStatusEl.textContent = "Recording live frames...";
+  await loadDashboard();
+}
+
+async function stopUserRecording() {
+  if (!activeUserRecordingId) return alert("No active recording to stop");
+  await api(`/api/recordings/${encodeURIComponent(activeUserRecordingId)}/stop`, { method: "POST", body: "{}" });
+  if (userRecordingStatusEl) userRecordingStatusEl.textContent = "Recording stopped. Click save.";
+  await loadDashboard();
+}
+
+async function saveUserRecording() {
+  if (!activeUserRecordingId) return alert("No active recording to save");
+  await api(`/api/recordings/${encodeURIComponent(activeUserRecordingId)}/save`, { method: "POST", body: "{}" });
+  localStorage.removeItem("cpUserActiveRecordingId");
+  activeUserRecordingId = "";
+  if (userRecordingStatusEl) userRecordingStatusEl.textContent = "Recording saved.";
+  await loadDashboard();
+}
+
 function renderFiles(files) {
   if (!userFilesEl) return;
   userFilesEl.innerHTML = "<h2>Exported Files</h2>";
@@ -780,6 +844,7 @@ function openLive() {
   poll();
   livePollTimer = setInterval(poll, 1200);
   const wsBase = (API_BASE || location.origin).replace("https://", "wss://").replace("http://", "ws://");
+  if ((API_BASE || location.origin).includes("vercel.app")) return;
   ws = new WebSocket(`${wsBase}/ws/live?deviceId=${selected.id}&adminToken=${encodeURIComponent(token)}`);
   ws.binaryType = "blob";
   ws.onmessage = (event) => {
@@ -790,6 +855,10 @@ function openLive() {
   };
   ws.onerror = () => {};
 }
+
+if (userStartRecordingEl) userStartRecordingEl.onclick = () => startUserRecording().catch((error) => alert(error.message));
+if (userStopRecordingEl) userStopRecordingEl.onclick = () => stopUserRecording().catch((error) => alert(error.message));
+if (userSaveRecordingEl) userSaveRecordingEl.onclick = () => saveUserRecording().catch((error) => alert(error.message));
 
 // allow tapping the live frame to send remote touch events (user-initiated)
 if (userFrameEl) {
