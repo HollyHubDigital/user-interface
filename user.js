@@ -698,6 +698,7 @@ async function enroll() {
   document.body.appendChild(link);
   link.click();
   link.remove();
+  await loadDashboard();
 }
 
 const enrollUserButton = $("enrollUser");
