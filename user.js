@@ -532,6 +532,10 @@ async function loadDashboard() {
 }
 
 
+function escapeHtml(str) {
+  return String(str || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+}
+
 function parseOutputJson(output) {
   try { return typeof output === "string" ? JSON.parse(output) : output; } catch { return null; }
 }
