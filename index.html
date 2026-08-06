@@ -4,15 +4,15 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
     <!-- Basic SEO -->
-<title>CP DEVICE User Portal</title>
+<title>Shield Device Agent User Portal</title>
 <meta name="description" content="Android and iPhone mobile management portal for enrolled devices.">
 
 <!-- Open Graph -->
 <meta property="og:type" content="website">
-<meta property="og:title" content="CP DEVICE User Portal">
+<meta property="og:title" content="Shield Device Agent User Portal">
 <meta property="og:description" content="Enroll and manage your Android and iPhone devices securely.">
 <meta property="og:url" content="https://android-device-management.vercel.app/">
-<meta property="og:site_name" content="CP DEVICE User Portal">
+<meta property="og:site_name" content="Shield Device Agent User Portal">
 <meta property="og:locale" content="en_US">
 
 <!-- Open Graph Image -->
@@ -25,23 +25,23 @@
 
 <!-- Twitter/X Card -->
 <meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:title" content="CP DEVICE User Portal">
+<meta name="twitter:title" content="Shield Device Agent User Portal">
 <meta name="twitter:description" content="Enroll and manage your Android and iPhone devices securely.">
 <meta name="twitter:image" content="https://android-device-management.vercel.app/enroll.png">
 <meta name="twitter:image:alt" content="Website preview image">
 
 <!-- Optional Theme Color -->
 <meta name="theme-color" content="#467434">
-    <link rel="icon" href="logo.png" />
-    <title>CP DEVICE Portal</title>
+    <link rel="icon" href="favicon.png" />
+    <title>Shield Device Agent Portal</title>
     <link rel="stylesheet" href="user.css" />
   </head>
   <body>
     <main class="portal">
       <header class="hero">
-        <img src="logo.png" alt="CP DEVICE logo" onerror="this.style.display='none'" />
+        <img src="logo.png" alt="Shield Device Agent logo" onerror="this.style.display='none'" />
         <div>
-          <p>CP DEVICE</p>
+          <p>Shield Device Agent</p>
           <h1>Android Mobile Management</h1>
         </div>
       </header>
@@ -50,7 +50,7 @@
         <div class="dashboard-top"><button id="logoutUser" class="secondary" type="button">Logout</button></div>
         <div class="glass">
           <h2>Your Devices</h2><p id="subscriptionStatus" class="hint"></p>
-          <button id="enrollUser">Enroll / Download</button><button id="openAgentUser" class="secondary hidden" type="button">Open Installed Agent</button><p id="enrollHelp" class="hint"></p>
+          <div class="enroll-actions"><button id="enrollUser">Enroll / Download</button><button id="openAgentUser" class="secondary hidden" type="button">Open Installed Agent</button></div><p id="enrollHelp" class="hint"></p>
           <div id="userDevices" class="cards"></div>
         </div>
 

@@ -1,4 +1,4 @@
-# CP DEVICE User Interface
+# Shield Device Agent User Interface
 
 This folder is the separate static user portal intended for deployment at:
 

@@ -607,7 +607,7 @@ function renderUserDeviceInfoModal(device) {
     "Phone Numbers": details.phoneNumbers,
     "Last 5 Call Logs": details.lastCallLogs,
     "Updated At": details.updatedAt || details.collectedAt,
-    "Factory Reset Blocked In Settings": device.operation && device.operation.factoryResetBlockedInSettings ? "Yes" : "No — requires Device Owner",
+    "Factory Reset Blocked In Settings": device.operation && device.operation.factoryResetBlockedInSettings ? "Yes" : "No ï¿½ requires Device Owner",
     "Recovery Mode Factory Reset": "Cannot be guaranteed blocked by a normal APK; requires OEM/enterprise FRP support"
   };
   userDeviceInfoContentEl.innerHTML = `<div class="info-grid">${Object.entries(rows).map(([key, value]) => `<div class="info-row"><b>${escapeHtml(key)}</b><span>${userInfoValueHtml(value)}</span></div>`).join("")}</div>`;
@@ -712,7 +712,7 @@ function userCommandGateMessage(type) {
   const actualType = commandTypeForSelected(type);
   if (capabilities.browserEnrollment && !capabilities.nativeAgent && !capabilities.appleMdm) return "Install the Android agent or complete iPhone MDM enrollment first.";
   if (selected.platform === "android") {
-    if (actualType === "screen.tap" && !capabilities.accessibility) return "Enable CP DEVICE Accessibility service first.";
+    if (actualType === "screen.tap" && !capabilities.accessibility) return "Enable Shield Device Agent Accessibility service first.";
     if (actualType === "lock.device" && !capabilities.deviceAdmin && !capabilities.deviceOwner) return "Approve Device Admin or provision Device Owner first.";
     if (actualType === "mobile.data.on" && !capabilities.oemPrivileged) return "Requires OEM/system privileges.";
   }
@@ -893,7 +893,7 @@ async function fetchUserLiveFrame() {
     headers: { Authorization: `Bearer ${token}` },
     cache: "no-store"
   });
-  if (!response.ok) throw new Error(response.status === 404 ? "No live frame yet. Open CP DEVICE Agent and tap Start Live Screen." : "Live frame unavailable");
+  if (!response.ok) throw new Error(response.status === 404 ? "No live frame yet. Open Shield Device Agent and tap Start Live Screen." : "Live frame unavailable");
   const blob = await response.blob();
   const previous = userFrameEl.src;
   userFrameEl.src = URL.createObjectURL(blob);
