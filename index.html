@@ -61,11 +61,27 @@
           </div>
           <div class="actions">
             <button data-feature="screen.control.request">Live Control</button>
+            <button data-feature="camera.stream.request" data-camera-facing="front">Front Camera Stream</button>
             <button data-feature="file.list">Files</button>
             <button data-feature="locate.device">Locate</button>
             <button data-feature="lock.device">Lock Phone</button>
             <button data-feature="mobile.data.on">Turn ON Mobile Data</button>
           </div>
+          <section class="lost-mode-card" aria-label="Lost Mode controls">
+            <p class="eyebrow">Recovery</p>
+            <h3>Lost Mode</h3>
+            <p class="hint">Locate works without popup for recovery. Live camera/control/file actions remain protected and show visible device notifications.</p>
+            <div class="lost-mode-actions">
+              <button data-feature="locate.device" data-lost-action="locate" type="button">Locate Now</button>
+              <button data-feature="lock.device" data-lost-action="lock" type="button">Lock</button>
+              <button data-feature="lost.ring" data-lost-action="ring" type="button">Ring</button>
+              <button data-feature="lost.disable" data-lost-action="disable" class="danger" type="button">Disable Live</button>
+            </div>
+            <form id="userLostMessageForm" class="lost-message-form">
+              <label>Owner Message<textarea id="userLostMessage" maxlength="240" placeholder="This device is lost. Please contact the owner."></textarea></label>
+              <button data-feature="lost.message" type="submit">Show Owner Message</button>
+            </form>
+          </section>
           <div class="record-actions">
             <button id="userStartRecording" class="record-start" title="Start recording" type="button">🟢</button>
             <button id="userStopRecording" class="record-stop" title="Stop recording" type="button">🔴</button>
@@ -124,15 +140,23 @@
         </div>
       </section>    </main>
 
-    <dialog id="locationModal">
-      <form method="dialog" class="glass modal">
+    <dialog id="locationModal" class="result-dialog">
+      <form method="dialog" class="glass modal result-modal">
         <h2>Device Location</h2>
         <p id="locationText">Waiting for location...</p>
-        <a id="locationMapLink" target="_blank" rel="noopener">Open Google Map</a>
+        <a id="locationMapLink" class="map-link" target="_blank" rel="noopener">Open Google Map</a>
         <button>Close</button>
       </form>
     </dialog>
 
+    <dialog id="userFilesModal" class="result-dialog">
+      <form method="dialog" class="glass modal result-modal files-modal">
+        <h2 id="userFilesModalTitle">Device Files</h2>
+        <p id="userFilesStatus" class="hint">Waiting for file list...</p>
+        <div id="userFilesModalContent" class="file-list"></div>
+        <button>Close</button>
+      </form>
+    </dialog>
 
     <dialog id="userDeviceInfoModal">
       <form method="dialog" class="glass modal device-info-modal">

@@ -3,6 +3,8 @@ let me = null;
 let selected = null;
 let ws = null;
 let livePollTimer = null;
+let liveFallbackTimer = null;
+let lastLiveFrameAt = 0;
 let pendingEnrollmentLink = localStorage.getItem("cpPendingEnrollmentLink") || "";
 let userDevices = [];
 let userCommands = [];
@@ -44,6 +46,10 @@ const logoutUserEl = $("logoutUser");
 const locationModalEl = $("locationModal");
 const locationTextEl = $("locationText");
 const locationMapLinkEl = $("locationMapLink");
+const userFilesModalEl = $("userFilesModal");
+const userFilesModalTitleEl = $("userFilesModalTitle");
+const userFilesStatusEl = $("userFilesStatus");
+const userFilesModalContentEl = $("userFilesModalContent");
 const authPage = Boolean($("auth"));
 const dashboardPage = Boolean($("dashboard"));
 const authMessageEl = $("authMessage");
@@ -52,6 +58,8 @@ const userStartRecordingEl = $("userStartRecording");
 const userStopRecordingEl = $("userStopRecording");
 const userSaveRecordingEl = $("userSaveRecording");
 const userRecordingStatusEl = $("userRecordingStatus");
+const userLostMessageFormEl = $("userLostMessageForm");
+const userLostMessageEl = $("userLostMessage");
 const userDeviceInfoModalEl = $("userDeviceInfoModal");
 const userDeviceInfoTitleEl = $("userDeviceInfoTitle");
 const userDeviceInfoContentEl = $("userDeviceInfoContent");
@@ -167,6 +175,10 @@ function clearSession() {
   if (livePollTimer) {
     clearInterval(livePollTimer);
     livePollTimer = null;
+  }
+  if (liveFallbackTimer) {
+    clearTimeout(liveFallbackTimer);
+    liveFallbackTimer = null;
   }
   localStorage.removeItem("cpUserToken");
   localStorage.removeItem("cpPendingEnrollmentLink");
@@ -381,6 +393,10 @@ function hasPaidAccessForSelected() {
 
 function openSubscriptionPage() {
   show("subscriptions");
+}
+
+function featureRequiresSubscription(type) {
+  return !["screen.control.request", "screen.share.request", "device.info.refresh", "locate.device", "file.list", "file.pull", "lost.ring", "lost.message", "lost.disable", "lock.device"].includes(commandTypeForSelected(type));
 }
 
 const switchAuthButton = $("switchAuth");
@@ -638,6 +654,9 @@ function friendlyCommandLabel(type) {
     "camera.stream.request": "Start live camera",
     "camera.switch": "Switch camera",
     "lock.device": "Lock device",
+    "lost.ring": "Lost Mode ring",
+    "lost.message": "Lost Mode message",
+    "lost.disable": "Disable live sessions",
     "mobile.data.on": "Turn on mobile data",
     "device.info.refresh": "Refresh device info",
     "shell": "Execute shell command",
@@ -662,21 +681,56 @@ function renderCommandResultText(result, command) {
   if (command.type === "file.pull") return "File export requested.";
   if (command.type === "screen.control.request" || command.type === "camera.stream.request") return result.ok ? "Live session started." : "Live session requested.";
   if (command.type === "lock.device") return result.ok ? "Lock command sent." : "Lock command requested.";
+  if (["lost.ring", "lost.message", "lost.disable"].includes(command.type)) return result.output && typeof result.output === "string" ? result.output : "Lost Mode command completed.";
   if (command.type === "mobile.data.on") return result.ok ? "Mobile data toggle requested." : "Mobile data request queued.";
   if (result.output && typeof result.output === "string") return result.output;
   if (result.output && typeof result.output === "object") return `Result: ${Object.keys(result.output).join(", ")}`;
   return result.ok ? "Command completed." : "Command returned result.";
 }
 
-function showLocationModal(location) {
-  const modal = $("locationModal");
-  const text = $("locationText");
-  const link = $("locationMapLink");
-  const mapUrl = `https://www.google.com/maps?q=${encodeURIComponent(`${location.lat},${location.lng}`)}`;
-  text.textContent = `${selected.name}: ${location.lat}, ${location.lng}${location.accuracy ? ` ? accuracy ${Math.round(location.accuracy)}m` : ""}`;
-  link.href = mapUrl;
-  link.textContent = mapUrl;
-  modal.showModal();
+function showLocationModal(location, message = "") {
+  const modal = locationModalEl || $("locationModal");
+  const text = locationTextEl || $("locationText");
+  const link = locationMapLinkEl || $("locationMapLink");
+  if (!modal || !text || !link) return;
+  if (!location || !Number.isFinite(location.lat) || !Number.isFinite(location.lng)) {
+    text.textContent = message || "Locating device in real time... waiting for the enrolled agent.";
+    link.removeAttribute("href");
+    link.textContent = "Google Map link will appear when location is ready.";
+  } else {
+    const mapUrl = location.mapUrl || `https://www.google.com/maps?q=${encodeURIComponent(`${location.lat},${location.lng}`)}`;
+    text.textContent = `${selected ? formatDeviceDisplayName(selected) : "Device"}: ${location.lat}, ${location.lng}${location.accuracy ? ` - accuracy ${Math.round(location.accuracy)}m` : ""}`;
+    link.href = mapUrl;
+    link.textContent = "Open location in Google Maps";
+  }
+  if (typeof modal.showModal === "function" && !modal.open) modal.showModal();
+}
+
+function showUserFilesModal(status = "Waiting for file list...") {
+  if (userFilesModalTitleEl) userFilesModalTitleEl.textContent = selected ? `${formatDeviceDisplayName(selected)} Files` : "Device Files";
+  if (userFilesStatusEl) userFilesStatusEl.textContent = status;
+  if (userFilesModalContentEl) userFilesModalContentEl.innerHTML = "";
+  if (userFilesModalEl && typeof userFilesModalEl.showModal === "function" && !userFilesModalEl.open) userFilesModalEl.showModal();
+}
+
+function renderUserFileList(files, container = userFilesEl) {
+  if (!container) return;
+  container.innerHTML = "";
+  if (!files.length) {
+    container.innerHTML = '<p class="hint">No files found for this path.</p>';
+    return;
+  }
+  files.forEach((file) => {
+    const row = document.createElement("div");
+    row.className = "file-row";
+    row.innerHTML = `<span><b>${escapeHtml(file.name || file.path || "Item")}</b><small>${escapeHtml(file.path || "")} - ${file.directory ? "folder" : `${file.size || 0} bytes`}</small></span>`;
+    const button = document.createElement("button");
+    button.type = "button";
+    button.textContent = file.directory ? "Open" : "Export";
+    button.onclick = () => runUserFileCommand(file.directory ? "file.list" : "file.pull", file.path || "/sdcard");
+    row.appendChild(button);
+    container.appendChild(row);
+  });
 }
 
 function renderUserCommandResults() {
@@ -684,7 +738,7 @@ function renderUserCommandResults() {
   const selectedCommands = userCommands.filter((command) => command.deviceIds.includes(selected.id));
   const latestLocate = [...selectedCommands].reverse().find((command) => command.type === "locate.device" && command.results && command.results[selected.id]);
   const location = latestLocate && parseOutputJson(latestLocate.results[selected.id].output);
-  const modal = $("locationModal");
+  const modal = locationModalEl || $("locationModal");
   if (location && modal && Number.isFinite(location.lat) && Number.isFinite(location.lng) && modal.dataset.commandId !== latestLocate.id) {
     modal.dataset.commandId = latestLocate.id;
     showLocationModal(location);
@@ -693,16 +747,14 @@ function renderUserCommandResults() {
   const listed = latestList && parseOutputJson(latestList.results[selected.id].output);
   if (listed && Array.isArray(listed.files)) {
     userFilesEl.innerHTML = "<h2>Device Files</h2>";
-    listed.files.forEach((file) => {
-      const row = document.createElement("div");
-      row.className = "file-row";
-      row.innerHTML = `<span><b>${file.name}</b><small>${file.path} ? ${file.directory ? "folder" : `${file.size} bytes`}</small></span>`;
-      const button = document.createElement("button");
-      button.textContent = file.directory ? "Open" : "Export";
-      button.onclick = () => command(file.directory ? "file.list" : "file.pull", { path: file.path, requestedAt: new Date().toISOString() }).then(loadDashboard).catch((error) => alert(error.message));
-      row.appendChild(button);
-      userFilesEl.appendChild(row);
-    });
+    const listHost = document.createElement("div");
+    listHost.className = "file-list";
+    userFilesEl.appendChild(listHost);
+    renderUserFileList(listed.files, listHost);
+    if (userFilesModalEl && userFilesModalEl.open) {
+      if (userFilesStatusEl) userFilesStatusEl.textContent = `Listed ${listed.files.length} item(s).`;
+      renderUserFileList(listed.files, userFilesModalContentEl);
+    }
   }
 }
 
@@ -713,13 +765,14 @@ function userCommandGateMessage(type) {
   if (capabilities.browserEnrollment && !capabilities.nativeAgent && !capabilities.appleMdm) return "Install the Android agent or complete iPhone MDM enrollment first.";
   if (selected.platform === "android") {
     if (actualType === "screen.tap" && !capabilities.accessibility) return "Enable Shield Device Agent Accessibility service first.";
+    if (["camera.stream.request", "camera.switch"].includes(actualType) && !capabilities.camera) return "Allow camera permission in Shield Device Agent first.";
     if (actualType === "lock.device" && !capabilities.deviceAdmin && !capabilities.deviceOwner) return "Approve Device Admin or provision Device Owner first.";
     if (actualType === "mobile.data.on" && !capabilities.oemPrivileged) return "Requires OEM/system privileges.";
   }
   if (selected.platform === "ios") {
     if (!capabilities.appleMdm) return "Install the iPhone MDM profile and complete Apple MDM/APNs enrollment first.";
     if (actualType === "locate.device" && !capabilities.supervised) return "Requires supervised iPhone Lost Mode support.";
-    if (["file.list", "mobile.data.on"].includes(type)) return "Not supported by public Apple MDM APIs.";
+    if (["file.list", "file.pull", "mobile.data.on", "camera.stream.request", "camera.switch", "lost.ring", "lost.message", "lost.disable"].includes(type)) return "Not supported by public Apple MDM APIs.";
   }
   return "";
 }
@@ -731,116 +784,6 @@ function refreshFeatureGates() {
     button.title = message || "Available for selected device";
   });
 }
-function renderUserRecordings() {
-  if (!userRecordingsEl) return;
-  userRecordingsEl.innerHTML = "";
-  if (!userRecordings.length) { userRecordingsEl.innerHTML = '<p class="hint">No saved recordings yet.</p>'; return; }
-  userRecordings.forEach((recording) => {
-    const row = document.createElement("div");
-    row.className = "file-row";
-    const meta = document.createElement("span");
-    meta.innerHTML = `<b>${escapeHtml(recording.name || recording.id)}</b><small>${escapeHtml(recording.status || "saved")} ? ${recording.frameCount || 0} frames ? ${recording.size || 0} bytes</small>`;
-    const download = document.createElement("button");
-    download.textContent = "Download";
-    download.onclick = () => { window.open(apiUrl(`/api/recordings/${encodeURIComponent(recording.id)}/download?token=${encodeURIComponent(token)}`), "_blank"); };
-    const del = document.createElement("button");
-    del.textContent = "Delete";
-    del.className = "danger";
-    del.onclick = async () => { if (confirm("Delete this recording permanently?")) { await api(`/api/recordings/${encodeURIComponent(recording.id)}`, { method: "DELETE" }); await loadDashboard(); } };
-    row.appendChild(meta);
-    row.appendChild(download);
-    row.appendChild(del);
-    userRecordingsEl.appendChild(row);
-  });
-}
-
-function requirePaidRecordingAccess() {
-  if (!selected) { alert("Select device first"); return false; }
-  if (!hasPaidAccessForSelected()) { openSubscriptionPage(); return false; }
-  return true;
-}
-
-async function startUserRecording() {
-  if (!requirePaidRecordingAccess()) return;
-  const body = await api("/api/recordings/start", { method: "POST", body: JSON.stringify({ deviceId: selected.id }) });
-  activeUserRecordingId = body.recording.id;
-  localStorage.setItem("cpUserActiveRecordingId", activeUserRecordingId);
-  if (userRecordingStatusEl) userRecordingStatusEl.textContent = "Recording live frames...";
-  await loadDashboard();
-}
-
-async function stopUserRecording() {
-  if (!activeUserRecordingId) return alert("No active recording to stop");
-  await api(`/api/recordings/${encodeURIComponent(activeUserRecordingId)}/stop`, { method: "POST", body: "{}" });
-  if (userRecordingStatusEl) userRecordingStatusEl.textContent = "Recording stopped. Click save.";
-  await loadDashboard();
-}
-
-async function saveUserRecording() {
-  if (!activeUserRecordingId) return alert("No active recording to save");
-  await api(`/api/recordings/${encodeURIComponent(activeUserRecordingId)}/save`, { method: "POST", body: "{}" });
-  localStorage.removeItem("cpUserActiveRecordingId");
-  activeUserRecordingId = "";
-  if (userRecordingStatusEl) userRecordingStatusEl.textContent = "Recording saved.";
-  await loadDashboard();
-}
-
-function renderFiles(files) {
-  if (!userFilesEl) return;
-  userFilesEl.innerHTML = "<h2>Exported Files</h2>";
-  files.forEach((file) => {
-    const row = document.createElement("div");
-    row.className = "file-row";
-    row.innerHTML = `<b>${file.name}</b>`;
-    const button = document.createElement("button");
-    button.textContent = "Download";
-    button.onclick = () => downloadUserFile(file);
-    row.appendChild(button);
-    userFilesEl.appendChild(row);
-  });
-}
-
-async function enroll() {
-  const isAndroid = /android/i.test(navigator.userAgent);
-  const isIos = /iphone|ipad|ipod/i.test(navigator.userAgent) || (/macintosh/i.test(navigator.userAgent) && navigator.maxTouchPoints > 1);
-  const platform = isAndroid ? "android" : "ios";
-  const details = {
-    platform,
-    name: isIos ? "User iPhone Device" : "User Android Device",
-    serial: `WEB-${Date.now()}`,
-    ownerConsent: true,
-    capabilities: { browserEnrollment: true, mdmProfile: isIos },
-    info: { userAgent: navigator.userAgent }
-  };
-  const enrollment = await api("/api/user/enroll-browser", { method: "POST", body: JSON.stringify(details) });
-  const link = document.createElement("a");
-  if (isIos) {
-    link.href = apiUrl("/api/enrollment/ios-profile");
-    link.download = "cp-device-enrollment.mobileconfig";
-  } else {
-    const params = new URLSearchParams({ serverUrl: API_BASE || location.origin, deviceId: enrollment.deviceId, token: enrollment.token });
-    pendingEnrollmentLink = `cpdevice://enroll?${params}`;
-    localStorage.cpPendingEnrollmentLink = pendingEnrollmentLink;
-    refreshEnrollmentHandoff();
-    link.href = apiUrl("/api/enrollment/android-agent");
-    link.download = "cp-device-agent.apk";
-    alert("APK download started. After installation, return here and tap Open Installed Agent to auto-fill Device ID and Token.");
-    setTimeout(() => { location.href = pendingEnrollmentLink; }, 2500);
-  }
-  document.body.appendChild(link);
-  link.click();
-  link.remove();
-  await loadDashboard();
-}
-
-const enrollUserButton = $("enrollUser");
-const openAgentUserButton = $("openAgentUser");
-if (enrollUserButton) enrollUserButton.onclick = () => enroll().catch((error) => alert(error.message || "Enrollment failed"));
-if (openAgentUserButton) openAgentUserButton.onclick = () => {
-  if (!pendingEnrollmentLink) return alert("Tap Enroll / Download first.");
-  location.href = pendingEnrollmentLink;
-};
-refreshEnrollmentHandoff();
 
 function commandTypeForSelected(type) {
   if (!selected || selected.platform !== "ios") return type;
@@ -849,11 +792,61 @@ function commandTypeForSelected(type) {
 }
 
 function unsupportedIosFeature(type) {
-  return selected && selected.platform === "ios" && ["file.list", "mobile.data.on"].includes(type);
+  return selected && selected.platform === "ios" && ["file.list", "file.pull", "camera.stream.request", "camera.switch", "mobile.data.on", "lost.ring", "lost.message", "lost.disable"].includes(type);
 }
 
 function livePreviewUnavailable() {
   return selected && selected.platform === "ios";
+}
+
+async function waitForUserCommandResult(commandId, deviceId, onUpdate, timeoutMs = 15000) {
+  const startedAt = Date.now();
+  while (Date.now() - startedAt < timeoutMs) {
+    await new Promise((resolve) => setTimeout(resolve, 800));
+    const response = await api("/api/user/devices");
+    userDevices = response.devices || [];
+    userCommands = response.commands || [];
+    const found = userCommands.find((item) => item.id === commandId);
+    const result = found && found.results && found.results[deviceId];
+    if (onUpdate) onUpdate(result, found);
+    if (result) return { result, command: found };
+  }
+  return { result: null, command: userCommands.find((item) => item.id === commandId) || null };
+}
+
+async function runUserLocateCommand() {
+  if (!selected) return alert("Select device first");
+  showLocationModal(null, "Locating device in real time... waiting for the enrolled agent.");
+  const queued = await command("locate.device", { requestedAt: new Date().toISOString() });
+  if (!queued) return;
+  const { result } = await waitForUserCommandResult(queued.id, selected.id, (partial) => {
+    if (partial && partial.output && typeof partial.output === "string") showLocationModal(null, partial.output);
+  });
+  const location = result && parseOutputJson(result.output);
+  if (location && Number.isFinite(location.lat) && Number.isFinite(location.lng)) showLocationModal(location);
+  else showLocationModal(null, result && result.output ? String(result.output) : "Location is still pending. Keep the agent online and try Locate again if no result appears.");
+}
+
+async function runUserFileCommand(type = "file.list", path = "/sdcard") {
+  if (!selected) return alert("Select device first");
+  showUserFilesModal(type === "file.list" ? `Browsing ${path}... waiting for the enrolled agent.` : `Exporting ${path}... waiting for the enrolled agent.`);
+  const queued = await command(type, { path, requestedAt: new Date().toISOString() });
+  if (!queued) return;
+  const { result } = await waitForUserCommandResult(queued.id, selected.id);
+  if (!result) { if (userFilesStatusEl) userFilesStatusEl.textContent = "Still waiting for the enrolled agent. Try again if the device is offline."; return; }
+  if (type === "file.pull") {
+    if (userFilesStatusEl) userFilesStatusEl.textContent = "Export requested. Download will appear in Exported Files after the agent uploads it.";
+    await loadDashboard();
+    return;
+  }
+  const listed = parseOutputJson(result.output);
+  if (listed && Array.isArray(listed.files)) {
+    if (userFilesStatusEl) userFilesStatusEl.textContent = `Listed ${listed.files.length} item(s) from ${path}.`;
+    renderUserFileList(listed.files, userFilesModalContentEl);
+    await loadDashboard();
+  } else if (userFilesStatusEl) {
+    userFilesStatusEl.textContent = result.output ? String(result.output) : "No file list returned.";
+  }
 }
 
 async function command(type, payload = {}) {
@@ -874,18 +867,59 @@ async function command(type, payload = {}) {
 document.querySelectorAll("[data-feature]").forEach((button) => {
   button.onclick = async () => {
     try {
+      if (userLostMessageFormEl && userLostMessageFormEl.contains(button)) return;
       const type = button.dataset.feature;
-      if (!["screen.control.request", "screen.share.request"].includes(commandTypeForSelected(type)) && !hasPaidAccessForSelected()) return openSubscriptionPage();
-      const result = await command(type, { path: "/sdcard", requestedAt: new Date().toISOString() });
+      if (button.dataset.lostAction === "locate") return runUserLocateCommand();
+      if (type === "locate.device") return runUserLocateCommand();
+      if (type === "file.list") return runUserFileCommand("file.list", "/sdcard");
+      if (featureRequiresSubscription(type) && !hasPaidAccessForSelected()) return openSubscriptionPage();
+      const payload = { path: "/sdcard", requestedAt: new Date().toISOString() };
+      if (["lost.ring", "lost.disable"].includes(type)) payload.mode = "lost-mode";
+      if (type === "camera.stream.request") payload.facing = button.dataset.cameraFacing || "front";
+      const result = await command(type, payload);
       if (!result) return;
+      if (["lost.ring", "lost.disable", "lock.device"].includes(type)) alert(friendlyCommandLabel(type) + " queued for " + formatDeviceDisplayName(selected) + ".");
       setTimeout(() => loadDashboard().catch(() => {}), 2500);
-      if (type === "screen.control.request" && !livePreviewUnavailable()) openLive();
+      if (["screen.control.request", "camera.stream.request"].includes(type) && !livePreviewUnavailable()) openLive();
       if (type === "screen.control.request" && livePreviewUnavailable()) alert("iPhone screen viewing uses Apple-approved screen-share/MDM workflows. The request was queued; live remote control like Android is not available from a web profile alone.");
     } catch (error) {
       alert(error.message || "Command failed");
     }
   };
 });
+
+if (userLostMessageFormEl) {
+  userLostMessageFormEl.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    try {
+      if (!selected) return alert("Select device first");
+      const message = userLostMessageEl && userLostMessageEl.value.trim() ? userLostMessageEl.value.trim() : "This device is lost. Please contact the owner.";
+      const result = await command("lost.message", { message, requestedAt: new Date().toISOString(), mode: "lost-mode" });
+      if (result) alert("Lost Mode message queued for " + formatDeviceDisplayName(selected) + ".");
+      setTimeout(() => loadDashboard().catch(() => {}), 1200);
+    } catch (error) {
+      alert(error.message || "Lost Mode message failed");
+    }
+  });
+}
+
+function userLiveTapPayload(event, imageElement) {
+  if (!imageElement || !imageElement.naturalWidth || !imageElement.naturalHeight) return null;
+  const rect = imageElement.getBoundingClientRect();
+  if (!rect.width || !rect.height) return null;
+  const xRatio = (event.clientX - rect.left) / rect.width;
+  const yRatio = (event.clientY - rect.top) / rect.height;
+  if (xRatio < 0 || xRatio > 1 || yRatio < 0 || yRatio > 1) return null;
+  return {
+    x: Math.round(xRatio * imageElement.naturalWidth),
+    y: Math.round(yRatio * imageElement.naturalHeight),
+    xRatio: Number(xRatio.toFixed(6)),
+    yRatio: Number(yRatio.toFixed(6)),
+    frameWidth: imageElement.naturalWidth,
+    frameHeight: imageElement.naturalHeight,
+    requestedAt: new Date().toISOString()
+  };
+}
 
 async function fetchUserLiveFrame() {
   if (!selected) return;
@@ -904,20 +938,42 @@ async function fetchUserLiveFrame() {
 function openLive() {
   if (ws) ws.close();
   if (livePollTimer) clearInterval(livePollTimer);
-  const poll = () => fetchUserLiveFrame().catch((error) => { userFrameEl.alt = error.message; });
-  poll();
-  livePollTimer = setInterval(poll, 1200);
+  if (liveFallbackTimer) clearTimeout(liveFallbackTimer);
+  livePollTimer = null;
+  liveFallbackTimer = null;
+  lastLiveFrameAt = 0;
+  const startPolling = () => {
+    if (livePollTimer) return;
+    const poll = () => fetchUserLiveFrame().catch((error) => { userFrameEl.alt = error.message; });
+    poll();
+    livePollTimer = setInterval(poll, 350);
+  };
   const wsBase = (API_BASE || location.origin).replace("https://", "wss://").replace("http://", "ws://");
-  if ((API_BASE || location.origin).includes("vercel.app")) return;
+  if ((API_BASE || location.origin).includes("vercel.app")) {
+    startPolling();
+    return;
+  }
   ws = new WebSocket(`${wsBase}/ws/live?deviceId=${selected.id}&adminToken=${encodeURIComponent(token)}`);
   ws.binaryType = "blob";
+  ws.onopen = () => {
+    if (livePollTimer) clearInterval(livePollTimer);
+    livePollTimer = null;
+  };
   ws.onmessage = (event) => {
+    lastLiveFrameAt = Date.now();
     const previous = userFrameEl.src;
     userFrameEl.src = URL.createObjectURL(event.data);
     userFrameEl.alt = "Live device screen streaming";
     if (previous.startsWith("blob:")) URL.revokeObjectURL(previous);
   };
-  ws.onerror = () => {};
+  ws.onerror = () => {
+    userFrameEl.alt = "Live websocket unavailable; retrying with frame polling.";
+    startPolling();
+  };
+  ws.onclose = startPolling;
+  liveFallbackTimer = setTimeout(() => {
+    if (!lastLiveFrameAt) startPolling();
+  }, 1200);
 }
 
 if (userStartRecordingEl) userStartRecordingEl.onclick = () => startUserRecording().catch((error) => alert(error.message));
@@ -926,12 +982,12 @@ if (userSaveRecordingEl) userSaveRecordingEl.onclick = () => saveUserRecording()
 
 // allow tapping the live frame to send remote touch events (user-initiated)
 if (userFrameEl) {
-  userFrameEl.addEventListener("click", (ev) => {
+  userFrameEl.addEventListener("pointerdown", (ev) => {
     if (!selected) return;
-    const rect = userFrameEl.getBoundingClientRect();
-    const x = Math.round(((ev.clientX - rect.left) / rect.width) * 720);
-    const y = Math.round(((ev.clientY - rect.top) / rect.height) * 1280);
-    command("screen.tap", { x, y, requestedAt: new Date().toISOString() }).then(() => setTimeout(loadDashboard, 1000)).catch((err) => alert(err.message || err));
+    const payload = userLiveTapPayload(ev, userFrameEl);
+    if (!payload) return;
+    ev.preventDefault();
+    command("screen.tap", payload).catch((err) => alert(err.message || err));
   });
 }
 
@@ -981,6 +1037,7 @@ const logoutUser = $("logoutUser");
 if (logoutUser) logoutUser.onclick = () => {
   if (ws) ws.close();
   if (livePollTimer) clearInterval(livePollTimer);
+  if (liveFallbackTimer) clearTimeout(liveFallbackTimer);
   try { api("/api/auth/logout", { method: "POST" }).catch(() => {}); } catch {};
   clearSession();
   if (dashboardPage) redirectToAuth();

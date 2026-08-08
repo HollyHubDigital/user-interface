@@ -200,6 +200,9 @@ a {
   max-width: 100%;
   max-height: 100%;
   object-fit: contain;
+  touch-action: none;
+  user-select: none;
+  cursor: crosshair;
 }
 
 .files {
@@ -441,3 +444,65 @@ img:not([src]), img[src=""] {
 #userDeviceInfoModal h2 { margin: 0; }
 #userDeviceInfoModal .modal-actions { display: flex; flex-wrap: wrap; gap: 12px; justify-content: flex-end; margin-top: 12px; }
 #userDeviceInfoModal .modal-actions button { min-width: 120px; }
+.result-dialog {
+  width: min(680px, 94vw);
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: white;
+}
+.result-dialog::backdrop {
+  background: rgba(0, 0, 0, 0.72);
+  backdrop-filter: blur(5px);
+}
+.result-modal {
+  display: grid;
+  gap: 14px;
+  max-height: 82vh;
+  overflow: auto;
+}
+.map-link {
+  display: inline-block;
+  overflow-wrap: anywhere;
+  border: 1px solid rgba(255,255,255,0.28);
+  border-radius: 12px;
+  padding: 10px;
+  background: rgba(0, 0, 0, 0.22);
+}
+.file-list {
+  display: grid;
+  gap: 10px;
+}
+.file-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+}
+.file-row small {
+  display: block;
+  opacity: 0.82;
+  overflow-wrap: anywhere;
+}
+@media (max-width: 560px) {
+  .file-row { grid-template-columns: 1fr; }
+}
+
+.lost-mode-card {
+  display: grid;
+  gap: 12px;
+  margin-top: 14px;
+  padding: 14px;
+  border: 1px solid rgba(255,255,255,.24);
+  border-radius: 18px;
+  background: linear-gradient(135deg, rgba(0,0,0,.42), rgba(245,143,32,.18));
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.08);
+}
+.lost-mode-card h3, .lost-mode-card p { margin: 0; }
+.lost-mode-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.lost-mode-actions button, .lost-message-form button { width: 100%; margin: 0; }
+.lost-message-form { display: grid; gap: 10px; }
+.lost-message-form label { display: grid; gap: 8px; color: #ffd19b; font-weight: 800; }
+.lost-message-form textarea { min-height: 86px; resize: vertical; }
+.danger { background: linear-gradient(135deg, #7a2020, #ef4444); }
+@media (max-width: 520px) { .lost-mode-actions { grid-template-columns: 1fr; } }
