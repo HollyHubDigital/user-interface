@@ -164,40 +164,6 @@ function setFieldError(field, message) {
   if (element) element.textContent = message || "";
 }
 
-function clearSession() {
-  token = "";
-  me = null;
-  selected = null;
-  if (ws) {
-    ws.close();
-    ws = null;
-  }
-  if (livePollTimer) {
-    clearInterval(livePollTimer);
-    livePollTimer = null;
-  }
-  if (liveFallbackTimer) {
-    clearTimeout(liveFallbackTimer);
-    liveFallbackTimer = null;
-  }
-  localStorage.removeItem("cpUserToken");
-  localStorage.removeItem("cpPendingEnrollmentLink");
-}
-
-async function tryRestoreSession() {
-  if (!token) return false;
-  try {
-    const response = await api("/api/auth/me");
-    if (!response.user) throw new Error("Login required");
-    me = response.user;
-    localStorage.cpUserToken = token;
-    return true;
-  } catch (error) {
-    clearSession();
-    return false;
-  }
-}
-
 function validatePhoneValue(value) {
   return /^\+[1-9]\d{7,14}$/.test(String(value || "").replace(/\s+/g, ""));
 }
@@ -323,11 +289,26 @@ async function resetFormErrors() {
   clearFieldErrors(resetErrors);
 }
 
-function clearSession() {
+function clearSession(message = "") {
   token = "";
   me = null;
   selected = null;
+  pendingEnrollmentLink = "";
+  if (ws) {
+    ws.close();
+    ws = null;
+  }
+  if (livePollTimer) {
+    clearInterval(livePollTimer);
+    livePollTimer = null;
+  }
+  if (liveFallbackTimer) {
+    clearTimeout(liveFallbackTimer);
+    liveFallbackTimer = null;
+  }
   localStorage.removeItem("cpUserToken");
+  localStorage.removeItem("cpPendingEnrollmentLink");
+  if (message) localStorage.setItem("cpUserAuthMessage", message);
   show("auth");
   const loginForm = $("loginForm");
   const signupForm = $("signupForm");
@@ -349,8 +330,7 @@ async function tryRestoreSession() {
     localStorage.setItem("cpUserToken", token);
     return true;
   } catch {
-    localStorage.setItem("cpUserAuthMessage", "Session expired or invalid. Please login again.");
-    clearSession();
+    clearSession("Session expired or invalid. Please login again.");
     return false;
   }
 }
@@ -380,8 +360,93 @@ function refreshEnrollmentHandoff() {
   if (!openAgentUserEl) return;
   const hasLink = Boolean(pendingEnrollmentLink);
   openAgentUserEl.classList.toggle("hidden", !hasLink);
-  if (enrollHelpEl) enrollHelpEl.textContent = hasLink ? "After installing the APK, tap Open Installed Agent to auto-fill Device ID and Token." : "";
+  if (enrollHelpEl) enrollHelpEl.textContent = hasLink ? "After installing the APK, tap Open Installed Agent to auto-fill Device ID and Token." : "Click Enroll / Download to create an enrollment and download the Shield Device APK.";
 }
+
+async function collectUserBrowserDeviceDetails() {
+  let userAgentData = null;
+  try {
+    userAgentData = navigator.userAgentData ? await navigator.userAgentData.getHighEntropyValues(["architecture", "bitness", "model", "platform", "platformVersion", "uaFullVersion"]) : null;
+  } catch {
+    userAgentData = null;
+  }
+  const detectedPlatform = /iphone|ipad|ipod/i.test(navigator.userAgent) ? "ios" : "android";
+  const screenSize = window.screen ? window.screen.width + "x" + window.screen.height : "unknown";
+  const serialSource = JSON.stringify({
+    userId: me && me.id,
+    userAgent: navigator.userAgent,
+    platform: navigator.platform,
+    language: navigator.language,
+    screen: screenSize,
+    touchPoints: navigator.maxTouchPoints || 0
+  });
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(serialSource));
+  const serial = Array.from(new Uint8Array(digest)).map((byte) => byte.toString(16).padStart(2, "0")).join("").slice(0, 24).toUpperCase();
+  return {
+    platform: detectedPlatform,
+    name: (detectedPlatform === "ios" ? "iPhone" : "Android") + " User Device",
+    serial,
+    ownerConsent: true,
+    capabilities: {
+      browserEnrollment: true,
+      nativeAgentRequired: detectedPlatform === "android",
+      camera: Boolean(navigator.mediaDevices && navigator.mediaDevices.getUserMedia),
+      screenControl: false,
+      shell: false
+    },
+    info: {
+      userAgent: navigator.userAgent,
+      browserPlatform: navigator.platform,
+      language: navigator.language,
+      screen: screenSize,
+      viewport: window.innerWidth + "x" + window.innerHeight,
+      pixelRatio: window.devicePixelRatio,
+      touchPoints: navigator.maxTouchPoints,
+      hardwareConcurrency: navigator.hardwareConcurrency,
+      deviceMemory: navigator.deviceMemory,
+      userAgentData
+    }
+  };
+}
+
+function buildUserAgentEnrollmentLink(enrollment) {
+  const params = new URLSearchParams({ serverUrl: API_BASE, deviceId: enrollment.deviceId, token: enrollment.token });
+  return "cpdevice://enroll?" + params.toString();
+}
+
+async function enrollUserDevice() {
+  if (!token) return redirectToAuth("Please login before enrolling a device.");
+  if (enrollUserEl) enrollUserEl.disabled = true;
+  try {
+    const details = await collectUserBrowserDeviceDetails();
+    const enrollment = await api("/api/user/enroll-browser", { method: "POST", body: JSON.stringify(details) });
+    pendingEnrollmentLink = buildUserAgentEnrollmentLink(enrollment);
+    localStorage.setItem("cpPendingEnrollmentLink", pendingEnrollmentLink);
+    const downloadPath = details.platform === "ios" ? "/api/enrollment/ios-profile" : "/api/enrollment/android-agent";
+    const link = document.createElement("a");
+    link.href = apiUrl(downloadPath);
+    link.download = details.platform === "ios" ? "cp-device-enrollment.mobileconfig" : "shield-device-agent.apk";
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    if (enrollHelpEl) enrollHelpEl.textContent = details.platform === "ios" ? "Install the downloaded iOS profile, then return here." : "APK download started. After installing it, tap Open Installed Agent to auto-fill enrollment details.";
+    refreshEnrollmentHandoff();
+    await loadDashboard();
+    return enrollment;
+  } finally {
+    if (enrollUserEl) enrollUserEl.disabled = false;
+  }
+}
+
+function openInstalledAgent() {
+  if (!pendingEnrollmentLink) {
+    refreshEnrollmentHandoff();
+    if (enrollHelpEl) enrollHelpEl.textContent = "Click Enroll / Download first, then tap Open Installed Agent.";
+    return;
+  }
+  window.location.href = pendingEnrollmentLink;
+}
+
 function hasPaidAccess() {
   return me && me.subscription && me.subscription.plan !== "free" && Date.parse(me.subscription.expiresAt) > Date.now();
 }
@@ -561,6 +626,7 @@ async function loadDashboard() {
   renderUserCommandResults();
   renderUserRecordings();
   refreshFeatureGates();
+  refreshEnrollmentHandoff();
 }
 
 
@@ -764,8 +830,8 @@ function userCommandGateMessage(type) {
   const actualType = commandTypeForSelected(type);
   if (capabilities.browserEnrollment && !capabilities.nativeAgent && !capabilities.appleMdm) return "Install the Android agent or complete iPhone MDM enrollment first.";
   if (selected.platform === "android") {
-    if (actualType === "screen.tap" && !capabilities.accessibility) return "Enable Shield Device Agent Accessibility service first.";
-    if (["camera.stream.request", "camera.switch"].includes(actualType) && !capabilities.camera) return "Allow camera permission in Shield Device Agent first.";
+    if (actualType === "screen.tap" && !capabilities.accessibility) return "Enable Shield Device Accessibility service first.";
+    if (["camera.stream.request", "camera.switch"].includes(actualType) && !capabilities.camera) return "Allow camera permission in Shield Device first.";
     if (actualType === "lock.device" && !capabilities.deviceAdmin && !capabilities.deviceOwner) return "Approve Device Admin or provision Device Owner first.";
     if (actualType === "mobile.data.on" && !capabilities.oemPrivileged) return "Requires OEM/system privileges.";
   }
@@ -927,7 +993,7 @@ async function fetchUserLiveFrame() {
     headers: { Authorization: `Bearer ${token}` },
     cache: "no-store"
   });
-  if (!response.ok) throw new Error(response.status === 404 ? "No live frame yet. Open Shield Device Agent and tap Start Live Screen." : "Live frame unavailable");
+  if (!response.ok) throw new Error(response.status === 404 ? "No live frame yet. Open Shield Device and tap Start Live Screen." : "Live frame unavailable");
   const blob = await response.blob();
   const previous = userFrameEl.src;
   userFrameEl.src = URL.createObjectURL(blob);
@@ -1024,7 +1090,12 @@ if (confirmPaymentEl) {
 }
 
 if (checkoutBackEl) checkoutBackEl.onclick = () => show("subscriptions");
-if (homeEl) homeEl.onclick = () => show("dashboard");
+if (homeEl) homeEl.onclick = () => { show("dashboard"); refreshEnrollmentHandoff(); };
+if (enrollUserEl) enrollUserEl.addEventListener("click", () => enrollUserDevice().catch((error) => {
+  if (enrollHelpEl) enrollHelpEl.textContent = error.message || "Enrollment failed";
+  else alert(error.message || "Enrollment failed");
+}));
+if (openAgentUserEl) openAgentUserEl.addEventListener("click", openInstalledAgent);
 
 document.querySelectorAll("[data-plan]").forEach((button) => {
   button.onclick = async () => {
