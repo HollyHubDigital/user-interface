@@ -2,9 +2,20 @@ let token = localStorage.getItem("cpUserToken") || "";
 let me = null;
 let selected = null;
 let ws = null;
+let audioWs = null;
 let livePollTimer = null;
+let liveAudioPollTimer = null;
 let liveFallbackTimer = null;
+let liveFetchController = null;
+let liveAudioFetchController = null;
 let lastLiveFrameAt = 0;
+let userLiveFrameSequence = 0;
+let userRenderedFrameSequence = 0;
+let userLiveFrameUrl = "";
+let userLastLiveFrameUpdatedAt = "";
+let userLiveAudioContext = null;
+let userLiveAudioNextTime = 0;
+let userLastLiveAudioUpdatedAt = "";
 let pendingEnrollmentLink = localStorage.getItem("cpPendingEnrollmentLink") || "";
 let userDevices = [];
 let userCommands = [];
@@ -298,8 +309,9 @@ function clearSession(message = "") {
     ws.close();
     ws = null;
   }
+  stopUserLiveAudio();
   if (livePollTimer) {
-    clearInterval(livePollTimer);
+    clearTimeout(livePollTimer);
     livePollTimer = null;
   }
   if (liveFallbackTimer) {
@@ -634,8 +646,70 @@ function escapeHtml(str) {
   return String(str || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
 }
 
+async function openUserStoredFile(file) {
+  const response = await fetch(apiUrl(`/api/user/files/${encodeURIComponent(file.id)}`), {
+    headers: { Authorization: `Bearer ${token}` },
+    cache: "no-store"
+  });
+  if (!response.ok) {
+    const body = await readJsonResponse(response);
+    throw new Error(body.error || "File download failed");
+  }
+  const blob = await response.blob();
+  const url = URL.createObjectURL(blob);
+  const opened = window.open(url, "_blank", "noopener");
+  if (!opened) {
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = file.name || "device-file";
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+  }
+  setTimeout(() => URL.revokeObjectURL(url), 60000);
+}
+
+function renderFiles(files = []) {
+  if (!userFilesEl) return;
+  const visibleFiles = selected ? files.filter((file) => file.sourceDeviceId === selected.id) : files;
+  userFilesEl.innerHTML = "<h2>Exported Files</h2>";
+  const list = document.createElement("div");
+  list.className = "file-list";
+  userFilesEl.appendChild(list);
+  if (!visibleFiles.length) {
+    list.innerHTML = '<p class="hint">No exported files yet. Click Files, open a folder, then Export a file to view or download it here.</p>';
+    return;
+  }
+  visibleFiles.slice().sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0)).forEach((file) => {
+    const row = document.createElement("div");
+    row.className = "file-row";
+    const type = file.contentType || "application/octet-stream";
+    row.innerHTML = `<span><b>${escapeHtml(file.name || "Device file")}</b><small>${escapeHtml(type)} - ${file.size || 0} bytes</small></span>`;
+    const button = document.createElement("button");
+    button.type = "button";
+    button.textContent = "View / Download";
+    button.onclick = () => openUserStoredFile(file).catch((error) => alert(error.message || "File open failed"));
+    row.appendChild(button);
+    list.appendChild(row);
+  });
+}
+
 function parseOutputJson(output) {
-  try { return typeof output === "string" ? JSON.parse(output) : output; } catch { return null; }
+  if (output && typeof output === "object") return output;
+  if (typeof output !== "string") return null;
+  let candidate = output.trim();
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      const parsed = JSON.parse(candidate);
+      if (typeof parsed !== "string") return parsed;
+      candidate = parsed.trim();
+      continue;
+    } catch { }
+    const unescaped = candidate.replace(/\\"/g, '"').replace(/\\\//g, '/');
+    if (unescaped === candidate) break;
+    candidate = unescaped;
+  }
+  return null;
 }
 
 function formatDeviceDisplayName(device) {
@@ -946,7 +1020,7 @@ document.querySelectorAll("[data-feature]").forEach((button) => {
       if (!result) return;
       if (["lost.ring", "lost.disable", "lock.device"].includes(type)) alert(friendlyCommandLabel(type) + " queued for " + formatDeviceDisplayName(selected) + ".");
       setTimeout(() => loadDashboard().catch(() => {}), 2500);
-      if (["screen.control.request", "camera.stream.request"].includes(type) && !livePreviewUnavailable()) openLive();
+      if (["screen.control.request", "camera.stream.request"].includes(type) && !livePreviewUnavailable()) openLive(type === "camera.stream.request" ? "camera" : "screen");
       if (type === "screen.control.request" && livePreviewUnavailable()) alert("iPhone screen viewing uses Apple-approved screen-share/MDM workflows. The request was queued; live remote control like Android is not available from a web profile alone.");
     } catch (error) {
       alert(error.message || "Command failed");
@@ -987,32 +1061,263 @@ function userLiveTapPayload(event, imageElement) {
   };
 }
 
-async function fetchUserLiveFrame() {
-  if (!selected) return;
-  const response = await fetch(apiUrl(`/api/live/${encodeURIComponent(selected.id)}/frame?t=${Date.now()}`), {
+function recordingDeviceLabel(recording) {
+  const device = userDevices.find((item) => item.id === recording.deviceId) || selected;
+  return recording.name || `${device ? formatDeviceDisplayName(device) : recording.deviceId || "Device"} live recording`;
+}
+
+function formatBytes(bytes = 0) {
+  const value = Number(bytes) || 0;
+  if (value < 1024) return `${value} B`;
+  if (value < 1024 * 1024) return `${(value / 1024).toFixed(1)} KB`;
+  return `${(value / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function renderUserRecordings() {
+  if (!userRecordingsEl) return;
+  const recordings = [...(userRecordings || [])].sort((a, b) => new Date(b.createdAt || b.updatedAt || 0) - new Date(a.createdAt || a.updatedAt || 0));
+  userRecordingsEl.innerHTML = recordings.length ? "" : '<p class="hint">No saved recordings yet.</p>';
+  for (const recording of recordings) {
+    const card = document.createElement("div");
+    card.className = "device-card recording-card";
+    const title = escapeHtml(recordingDeviceLabel(recording));
+    const meta = `${escapeHtml(recording.status || "recording")} • ${recording.frameCount || 0} frames • ${formatBytes(recording.size || 0)}`;
+    card.innerHTML = `<div class="device-main"><b>${title}</b><small>${meta}</small></div>`;
+    const controls = document.createElement("div");
+    controls.className = "device-controls";
+    const view = document.createElement("button");
+    view.type = "button";
+    view.textContent = "View";
+    view.onclick = () => viewUserRecording(recording.id);
+    const download = document.createElement("button");
+    download.type = "button";
+    download.textContent = "Download";
+    download.onclick = () => downloadUserRecording(recording.id).catch((error) => alert(error.message));
+    const del = document.createElement("button");
+    del.type = "button";
+    del.className = "danger";
+    del.textContent = "Delete";
+    del.onclick = () => deleteUserRecording(recording.id).catch((error) => alert(error.message));
+    controls.appendChild(view);
+    controls.appendChild(download);
+    controls.appendChild(del);
+    card.appendChild(controls);
+    userRecordingsEl.appendChild(card);
+  }
+}
+
+async function startUserRecording() {
+  if (!selected) throw new Error("Select a device before recording");
+  if (!hasPaidAccessForSelected()) return openSubscriptionPage();
+  const body = await api("/api/recordings/start", { method: "POST", body: JSON.stringify({ deviceId: selected.id }) });
+  activeUserRecordingId = body.recording && body.recording.id;
+  if (activeUserRecordingId) localStorage.setItem("cpUserActiveRecordingId", activeUserRecordingId);
+  if (userRecordingStatusEl) userRecordingStatusEl.textContent = `Recording ${formatDeviceDisplayName(selected)}...`;
+  await loadDashboard();
+}
+
+async function stopUserRecording() {
+  if (!activeUserRecordingId) throw new Error("No active recording to stop");
+  const body = await api(`/api/recordings/${encodeURIComponent(activeUserRecordingId)}/stop`, { method: "POST", body: "{}" });
+  if (userRecordingStatusEl) userRecordingStatusEl.textContent = `Recording stopped: ${body.recording ? body.recording.id : activeUserRecordingId}`;
+  await loadDashboard();
+}
+
+async function saveUserRecording() {
+  if (!activeUserRecordingId) throw new Error("No active recording to save");
+  const body = await api(`/api/recordings/${encodeURIComponent(activeUserRecordingId)}/save`, { method: "POST", body: "{}" });
+  activeUserRecordingId = "";
+  localStorage.removeItem("cpUserActiveRecordingId");
+  if (userRecordingStatusEl) userRecordingStatusEl.textContent = body.github && body.github.skipped ? `Saved locally: ${body.github.reason}` : "Recording saved.";
+  await loadDashboard();
+}
+
+function viewUserRecording(recordingId) {
+  window.open(apiUrl(`/api/recordings/${encodeURIComponent(recordingId)}/download?inline=1&token=${encodeURIComponent(token)}`), "_blank", "noopener");
+}
+
+async function downloadUserRecording(recordingId) {
+  const response = await fetch(apiUrl(`/api/recordings/${encodeURIComponent(recordingId)}/download`), {
     headers: { Authorization: `Bearer ${token}` },
     cache: "no-store"
   });
-  if (!response.ok) throw new Error(response.status === 404 ? "No live frame yet. Open Shield Device and tap Start Live Screen." : "Live frame unavailable");
+  if (!response.ok) {
+    const body = await readJsonResponse(response);
+    throw new Error(body.error || "Recording download failed");
+  }
   const blob = await response.blob();
-  const previous = userFrameEl.src;
-  userFrameEl.src = URL.createObjectURL(blob);
-  userFrameEl.alt = "Live device screen streaming";
-  if (previous.startsWith("blob:")) URL.revokeObjectURL(previous);
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `${recordingId}.mjpeg`;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
 }
 
-function openLive() {
+async function deleteUserRecording(recordingId) {
+  if (!confirm("Delete this recording permanently?")) return;
+  await api(`/api/recordings/${encodeURIComponent(recordingId)}`, { method: "DELETE" });
+  if (activeUserRecordingId === recordingId) {
+    activeUserRecordingId = "";
+    localStorage.removeItem("cpUserActiveRecordingId");
+  }
+  await loadDashboard();
+}
+function resetUserLiveFrameState() {
+  userLiveFrameSequence += 1;
+  userRenderedFrameSequence = userLiveFrameSequence;
+  userLastLiveFrameUpdatedAt = "";
+  if (liveFetchController) liveFetchController.abort();
+  liveFetchController = null;
+  if (userLiveFrameUrl) URL.revokeObjectURL(userLiveFrameUrl);
+  userLiveFrameUrl = "";
+}
+
+function renderUserLiveBlob(blob) {
+  if (!userFrameEl) return;
+  const sequence = ++userLiveFrameSequence;
+  const url = URL.createObjectURL(blob);
+  const probe = new Image();
+  probe.onload = () => {
+    if (sequence < userRenderedFrameSequence) {
+      URL.revokeObjectURL(url);
+      return;
+    }
+    const previous = userLiveFrameUrl;
+    userRenderedFrameSequence = sequence;
+    userLiveFrameUrl = url;
+    userFrameEl.src = url;
+    userFrameEl.alt = "Live device screen streaming";
+    if (previous && previous !== url) URL.revokeObjectURL(previous);
+  };
+  probe.onerror = () => URL.revokeObjectURL(url);
+  probe.src = url;
+}
+
+async function fetchUserLiveFrame() {
+  if (!selected) return;
+  if (liveFetchController) liveFetchController.abort();
+  const controller = new AbortController();
+  liveFetchController = controller;
+  const response = await fetch(apiUrl(`/api/live/${encodeURIComponent(selected.id)}/frame?t=${Date.now()}`), {
+    headers: { Authorization: `Bearer ${token}` },
+    cache: "no-store",
+    signal: controller.signal
+  });
+  if (!response.ok) throw new Error(response.status === 404 ? "No live frame yet. Open Shield Device and tap Start Live Screen." : "Live frame unavailable");
+  const updatedAt = response.headers.get("X-Frame-Updated-At") || "";
+  if (updatedAt && userLastLiveFrameUpdatedAt && Date.parse(updatedAt) < Date.parse(userLastLiveFrameUpdatedAt)) return;
+  const blob = await response.blob();
+  if (controller.signal.aborted) return;
+  if (updatedAt) userLastLiveFrameUpdatedAt = updatedAt;
+  renderUserLiveBlob(blob);
+}
+
+function stopUserLiveAudio() {
+  if (audioWs) audioWs.close();
+  if (liveAudioPollTimer) clearTimeout(liveAudioPollTimer);
+  if (liveAudioFetchController) liveAudioFetchController.abort();
+  audioWs = null;
+  liveAudioPollTimer = null;
+  liveAudioFetchController = null;
+  userLiveAudioNextTime = 0;
+  userLastLiveAudioUpdatedAt = "";
+}
+
+async function ensureUserLiveAudioContext() {
+  const AudioCtor = window.AudioContext || window.webkitAudioContext;
+  if (!AudioCtor) return null;
+  if (!userLiveAudioContext) userLiveAudioContext = new AudioCtor({ sampleRate: 16000 });
+  if (userLiveAudioContext.state === "suspended") await userLiveAudioContext.resume();
+  return userLiveAudioContext;
+}
+
+function playUserPcmChunk(arrayBuffer, sampleRate = 16000) {
+  if (!userLiveAudioContext || !arrayBuffer || arrayBuffer.byteLength < 2) return;
+  const samples = new Int16Array(arrayBuffer);
+  const audioBuffer = userLiveAudioContext.createBuffer(1, samples.length, sampleRate);
+  const channel = audioBuffer.getChannelData(0);
+  for (let index = 0; index < samples.length; index += 1) channel[index] = Math.max(-1, Math.min(1, samples[index] / 32768));
+  const source = userLiveAudioContext.createBufferSource();
+  source.buffer = audioBuffer;
+  source.connect(userLiveAudioContext.destination);
+  const now = userLiveAudioContext.currentTime;
+  if (!userLiveAudioNextTime || userLiveAudioNextTime < now || userLiveAudioNextTime - now > 0.45) userLiveAudioNextTime = now + 0.04;
+  source.start(userLiveAudioNextTime);
+  userLiveAudioNextTime += audioBuffer.duration;
+}
+
+async function fetchUserLiveAudio() {
+  if (!selected) return;
+  if (liveAudioFetchController) liveAudioFetchController.abort();
+  const controller = new AbortController();
+  liveAudioFetchController = controller;
+  const response = await fetch(apiUrl(`/api/live/${encodeURIComponent(selected.id)}/audio?t=${Date.now()}`), {
+    headers: { Authorization: `Bearer ${token}` },
+    cache: "no-store",
+    signal: controller.signal
+  });
+  if (!response.ok) return;
+  const updatedAt = response.headers.get("X-Audio-Updated-At") || "";
+  if (updatedAt && userLastLiveAudioUpdatedAt && Date.parse(updatedAt) <= Date.parse(userLastLiveAudioUpdatedAt)) return;
+  const sampleRate = Number(response.headers.get("X-Audio-Sample-Rate") || 16000) || 16000;
+  const chunk = await response.arrayBuffer();
+  if (controller.signal.aborted) return;
+  if (updatedAt) userLastLiveAudioUpdatedAt = updatedAt;
+  playUserPcmChunk(chunk, sampleRate);
+}
+
+async function startUserLiveAudio() {
+  await ensureUserLiveAudioContext();
+  stopUserLiveAudio();
+  await ensureUserLiveAudioContext();
+  const startAudioPolling = () => {
+    if (liveAudioPollTimer) return;
+    const poll = async () => {
+      await fetchUserLiveAudio().catch(() => {});
+      liveAudioPollTimer = setTimeout(poll, 180);
+    };
+    poll();
+  };
+  const wsBase = (API_BASE || location.origin).replace("https://", "wss://").replace("http://", "ws://");
+  if ((API_BASE || location.origin).includes("vercel.app")) {
+    startAudioPolling();
+    return;
+  }
+  audioWs = new WebSocket(`${wsBase}/ws/live-audio?deviceId=${encodeURIComponent(selected.id)}&adminToken=${encodeURIComponent(token)}`);
+  audioWs.binaryType = "arraybuffer";
+  audioWs.onmessage = (event) => playUserPcmChunk(event.data, 16000);
+  audioWs.onerror = () => {
+    if (audioWs) audioWs.close();
+    startAudioPolling();
+  };
+}
+
+function openLive(mode = "screen") {
   if (ws) ws.close();
-  if (livePollTimer) clearInterval(livePollTimer);
+  if (audioWs) audioWs.close();
+  if (livePollTimer) clearTimeout(livePollTimer);
   if (liveFallbackTimer) clearTimeout(liveFallbackTimer);
   livePollTimer = null;
   liveFallbackTimer = null;
   lastLiveFrameAt = 0;
+  resetUserLiveFrameState();
+  if (mode === "camera") startUserLiveAudio().catch(() => {});
+  else stopUserLiveAudio();
   const startPolling = () => {
     if (livePollTimer) return;
-    const poll = () => fetchUserLiveFrame().catch((error) => { userFrameEl.alt = error.message; });
+    const poll = async () => {
+      try {
+        await fetchUserLiveFrame();
+      } catch (error) {
+        if (error.name !== "AbortError") userFrameEl.alt = error.message;
+      } finally {
+        livePollTimer = setTimeout(poll, 220);
+      }
+    };
     poll();
-    livePollTimer = setInterval(poll, 350);
   };
   const wsBase = (API_BASE || location.origin).replace("https://", "wss://").replace("http://", "ws://");
   if ((API_BASE || location.origin).includes("vercel.app")) {
@@ -1022,15 +1327,12 @@ function openLive() {
   ws = new WebSocket(`${wsBase}/ws/live?deviceId=${selected.id}&adminToken=${encodeURIComponent(token)}`);
   ws.binaryType = "blob";
   ws.onopen = () => {
-    if (livePollTimer) clearInterval(livePollTimer);
+    if (livePollTimer) clearTimeout(livePollTimer);
     livePollTimer = null;
   };
   ws.onmessage = (event) => {
     lastLiveFrameAt = Date.now();
-    const previous = userFrameEl.src;
-    userFrameEl.src = URL.createObjectURL(event.data);
-    userFrameEl.alt = "Live device screen streaming";
-    if (previous.startsWith("blob:")) URL.revokeObjectURL(previous);
+    renderUserLiveBlob(event.data);
   };
   ws.onerror = () => {
     userFrameEl.alt = "Live websocket unavailable; retrying with frame polling.";
@@ -1107,7 +1409,7 @@ document.querySelectorAll("[data-plan]").forEach((button) => {
 const logoutUser = $("logoutUser");
 if (logoutUser) logoutUser.onclick = () => {
   if (ws) ws.close();
-  if (livePollTimer) clearInterval(livePollTimer);
+  if (livePollTimer) clearTimeout(livePollTimer);
   if (liveFallbackTimer) clearTimeout(liveFallbackTimer);
   try { api("/api/auth/logout", { method: "POST" }).catch(() => {}); } catch {};
   clearSession();
