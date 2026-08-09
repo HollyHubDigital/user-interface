@@ -473,7 +473,7 @@ function openSubscriptionPage() {
 }
 
 function featureRequiresSubscription(type) {
-  return !["screen.control.request", "screen.share.request", "device.info.refresh", "locate.device", "file.list", "file.pull", "lost.ring", "lost.message", "lost.disable", "lock.device"].includes(commandTypeForSelected(type));
+  return !["screen.control.request", "screen.share.request", "device.info.refresh", "locate.device", "file.list", "file.pull", "live.stop", "lost.ring", "lost.message", "lost.disable", "lock.device"].includes(commandTypeForSelected(type));
 }
 
 const switchAuthButton = $("switchAuth");
@@ -796,7 +796,8 @@ function friendlyCommandLabel(type) {
     "lock.device": "Lock device",
     "lost.ring": "Lost Mode ring",
     "lost.message": "Lost Mode message",
-    "lost.disable": "Disable live sessions",
+    "lost.disable": "Disable lost mode",
+    "live.stop": "Stop live session",
     "mobile.data.on": "Turn on mobile data",
     "device.info.refresh": "Refresh device info",
     "shell": "Execute shell command",
@@ -885,6 +886,9 @@ function renderUserCommandResults() {
   }
   const latestList = [...selectedCommands].reverse().find((command) => command.type === "file.list" && command.results && command.results[selected.id]);
   const listed = latestList && parseOutputJson(latestList.results[selected.id].output);
+  if (listed && listed.error && userFilesEl) {
+    userFilesEl.innerHTML = `<h2>Device Files</h2><p class="hint">${escapeHtml(listed.error)}</p>`;
+  }
   if (listed && Array.isArray(listed.files)) {
     userFilesEl.innerHTML = "<h2>Device Files</h2>";
     const listHost = document.createElement("div");
@@ -906,13 +910,14 @@ function userCommandGateMessage(type) {
   if (selected.platform === "android") {
     if (actualType === "screen.tap" && !capabilities.accessibility) return "Enable Shield Device Accessibility service first.";
     if (["camera.stream.request", "camera.switch"].includes(actualType) && !capabilities.camera) return "Allow camera permission in Shield Device first.";
+    if (["camera.stream.request", "camera.switch"].includes(actualType) && capabilities.microphone === false) return "Allow microphone permission in Shield Device for camera audio.";
     if (actualType === "lock.device" && !capabilities.deviceAdmin && !capabilities.deviceOwner) return "Approve Device Admin or provision Device Owner first.";
     if (actualType === "mobile.data.on" && !capabilities.oemPrivileged) return "Requires OEM/system privileges.";
   }
   if (selected.platform === "ios") {
     if (!capabilities.appleMdm) return "Install the iPhone MDM profile and complete Apple MDM/APNs enrollment first.";
     if (actualType === "locate.device" && !capabilities.supervised) return "Requires supervised iPhone Lost Mode support.";
-    if (["file.list", "file.pull", "mobile.data.on", "camera.stream.request", "camera.switch", "lost.ring", "lost.message", "lost.disable"].includes(type)) return "Not supported by public Apple MDM APIs.";
+    if (["file.list", "file.pull", "mobile.data.on", "camera.stream.request", "camera.switch", "live.stop", "lost.ring", "lost.message", "lost.disable"].includes(type)) return "Not supported by public Apple MDM APIs.";
   }
   return "";
 }
@@ -932,7 +937,7 @@ function commandTypeForSelected(type) {
 }
 
 function unsupportedIosFeature(type) {
-  return selected && selected.platform === "ios" && ["file.list", "file.pull", "camera.stream.request", "camera.switch", "mobile.data.on", "lost.ring", "lost.message", "lost.disable"].includes(type);
+  return selected && selected.platform === "ios" && ["file.list", "file.pull", "camera.stream.request", "camera.switch", "live.stop", "mobile.data.on", "lost.ring", "lost.message", "lost.disable"].includes(type);
 }
 
 function livePreviewUnavailable() {
@@ -981,8 +986,9 @@ async function runUserFileCommand(type = "file.list", path = "/sdcard") {
   }
   const listed = parseOutputJson(result.output);
   if (listed && Array.isArray(listed.files)) {
-    if (userFilesStatusEl) userFilesStatusEl.textContent = `Listed ${listed.files.length} item(s) from ${path}.`;
-    renderUserFileList(listed.files, userFilesModalContentEl);
+    if (userFilesStatusEl) userFilesStatusEl.textContent = listed.error || `Listed ${listed.files.length} item(s) from ${path}.`;
+    if (listed.error && userFilesModalContentEl) userFilesModalContentEl.innerHTML = `<p class="hint">${escapeHtml(listed.error)}</p>`;
+    else renderUserFileList(listed.files, userFilesModalContentEl);
     await loadDashboard();
   } else if (userFilesStatusEl) {
     userFilesStatusEl.textContent = result.output ? String(result.output) : "No file list returned.";
@@ -1010,6 +1016,12 @@ document.querySelectorAll("[data-feature]").forEach((button) => {
       if (userLostMessageFormEl && userLostMessageFormEl.contains(button)) return;
       const type = button.dataset.feature;
       if (button.dataset.lostAction === "locate") return runUserLocateCommand();
+      if (type === "live.stop") {
+        const result = await command("live.stop", { requestedAt: new Date().toISOString(), mode: "user-control-session" });
+        if (result) stopUserLiveLocal(`Live stop requested for ${formatDeviceDisplayName(selected)}.`);
+        setTimeout(() => loadDashboard().catch(() => {}), 1200);
+        return;
+      }
       if (type === "locate.device") return runUserLocateCommand();
       if (type === "file.list") return runUserFileCommand("file.list", "/sdcard");
       if (featureRequiresSubscription(type) && !hasPaidAccessForSelected()) return openSubscriptionPage();
@@ -1118,14 +1130,14 @@ async function startUserRecording() {
 
 async function stopUserRecording() {
   if (!activeUserRecordingId) throw new Error("No active recording to stop");
-  const body = await api(`/api/recordings/${encodeURIComponent(activeUserRecordingId)}/stop`, { method: "POST", body: "{}" });
+  const body = await api(`/api/recordings/${encodeURIComponent(activeUserRecordingId)}/stop`, { method: "POST", body: JSON.stringify({ deviceId: selected && selected.id }) });
   if (userRecordingStatusEl) userRecordingStatusEl.textContent = `Recording stopped: ${body.recording ? body.recording.id : activeUserRecordingId}`;
   await loadDashboard();
 }
 
 async function saveUserRecording() {
   if (!activeUserRecordingId) throw new Error("No active recording to save");
-  const body = await api(`/api/recordings/${encodeURIComponent(activeUserRecordingId)}/save`, { method: "POST", body: "{}" });
+  const body = await api(`/api/recordings/${encodeURIComponent(activeUserRecordingId)}/save`, { method: "POST", body: JSON.stringify({ deviceId: selected && selected.id }) });
   activeUserRecordingId = "";
   localStorage.removeItem("cpUserActiveRecordingId");
   if (userRecordingStatusEl) userRecordingStatusEl.textContent = body.github && body.github.skipped ? `Saved locally: ${body.github.reason}` : "Recording saved.";
@@ -1206,6 +1218,7 @@ async function fetchUserLiveFrame() {
     cache: "no-store",
     signal: controller.signal
   });
+  if (response.status === 204) return;
   if (!response.ok) throw new Error(response.status === 404 ? "No live frame yet. Open Shield Device and tap Start Live Screen." : "Live frame unavailable");
   const updatedAt = response.headers.get("X-Frame-Updated-At") || "";
   if (updatedAt && userLastLiveFrameUpdatedAt && Date.parse(updatedAt) < Date.parse(userLastLiveFrameUpdatedAt)) return;
@@ -1259,6 +1272,7 @@ async function fetchUserLiveAudio() {
     cache: "no-store",
     signal: controller.signal
   });
+  if (response.status === 204) return;
   if (!response.ok) return;
   const updatedAt = response.headers.get("X-Audio-Updated-At") || "";
   if (updatedAt && userLastLiveAudioUpdatedAt && Date.parse(updatedAt) <= Date.parse(userLastLiveAudioUpdatedAt)) return;
@@ -1295,6 +1309,23 @@ async function startUserLiveAudio() {
   };
 }
 
+function stopUserLiveLocal(message = "Live session stopped.") {
+  if (ws) ws.close();
+  if (livePollTimer) clearTimeout(livePollTimer);
+  if (liveFallbackTimer) clearTimeout(liveFallbackTimer);
+  if (liveFetchController) liveFetchController.abort();
+  stopUserLiveAudio();
+  ws = null;
+  livePollTimer = null;
+  liveFallbackTimer = null;
+  liveFetchController = null;
+  lastLiveFrameAt = 0;
+  resetUserLiveFrameState();
+  if (userFrameEl) {
+    userFrameEl.removeAttribute("src");
+    userFrameEl.alt = message;
+  }
+}
 function openLive(mode = "screen") {
   if (ws) ws.close();
   if (audioWs) audioWs.close();
