@@ -12,6 +12,8 @@ let lastLiveFrameAt = 0;
 let userLiveFrameSequence = 0;
 let userRenderedFrameSequence = 0;
 let userLiveFrameUrl = "";
+let userLiveRenderBusy = false;
+let userLivePendingBlob = null;
 let userLastLiveFrameUpdatedAt = "";
 let userLiveAudioContext = null;
 let userLiveAudioNextTime = 0;
@@ -1194,23 +1196,31 @@ function resetUserLiveFrameState() {
 }
 
 function renderUserLiveBlob(blob) {
-  if (!userFrameEl) return;
-  const sequence = ++userLiveFrameSequence;
+  if (!userFrameEl || !blob) return;
+  if (userLiveRenderBusy) {
+    userLivePendingBlob = blob;
+    return;
+  }
+  userLiveRenderBusy = true;
   const url = URL.createObjectURL(blob);
   const probe = new Image();
   probe.onload = () => {
-    if (sequence < userRenderedFrameSequence) {
-      URL.revokeObjectURL(url);
-      return;
-    }
     const previous = userLiveFrameUrl;
-    userRenderedFrameSequence = sequence;
     userLiveFrameUrl = url;
     userFrameEl.src = url;
     userFrameEl.alt = "Live device screen streaming";
     if (previous && previous !== url) URL.revokeObjectURL(previous);
+    userLiveRenderBusy = false;
+    if (userLivePendingBlob) {
+      const nextBlob = userLivePendingBlob;
+      userLivePendingBlob = null;
+      renderUserLiveBlob(nextBlob);
+    }
   };
-  probe.onerror = () => URL.revokeObjectURL(url);
+  probe.onerror = () => {
+    URL.revokeObjectURL(url);
+    userLiveRenderBusy = false;
+  };
   probe.src = url;
 }
 
