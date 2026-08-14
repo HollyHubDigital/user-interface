@@ -22,9 +22,14 @@ let userCommands = [];
 let userRecordings = [];
 let activeUserRecordingId = localStorage.getItem("cpUserActiveRecordingId") || "";
 
-const API_BASE = (window.CP_DEVICE_CONFIG && window.CP_DEVICE_CONFIG.API_BASE_URL) || window.location.origin;
+const APP_CONFIG = window.CP_DEVICE_CONFIG || {};
+const API_BASE = (APP_CONFIG.API_BASE_URL || window.location.origin).replace(/\/$/, "");
+const LIVE_BASE = (APP_CONFIG.LIVE_BASE_URL || API_BASE || window.location.origin).replace(/\/$/, "");
 const $ = (id) => document.getElementById(id);
 const apiUrl = (path) => `${API_BASE}${path}`;
+const liveApiUrl = (path) => `${LIVE_BASE}${path}`;
+const liveWsUrl = (path) => `${LIVE_BASE.replace("https://", "wss://").replace("http://", "ws://")}${path}`;
+const persistentLiveConfigured = () => LIVE_BASE !== window.location.origin && !LIVE_BASE.includes("vercel.app");
 
 const signupFormEl = $("signupForm");
 const loginFormEl = $("loginForm");
@@ -422,7 +427,7 @@ async function collectUserBrowserDeviceDetails() {
 }
 
 function buildUserAgentEnrollmentLink(enrollment) {
-  const params = new URLSearchParams({ serverUrl: API_BASE, deviceId: enrollment.deviceId, token: enrollment.token });
+  const params = new URLSearchParams({ serverUrl: API_BASE, liveServerUrl: LIVE_BASE, deviceId: enrollment.deviceId, token: enrollment.token });
   return "cpdevice://enroll?" + params.toString();
 }
 
@@ -1213,7 +1218,7 @@ async function fetchUserLiveFrame() {
   if (liveFetchController) liveFetchController.abort();
   const controller = new AbortController();
   liveFetchController = controller;
-  const response = await fetch(apiUrl(`/api/live/${encodeURIComponent(selected.id)}/frame?t=${Date.now()}`), {
+  const response = await fetch(liveApiUrl(`/api/live/${encodeURIComponent(selected.id)}/frame?t=${Date.now()}`), {
     headers: { Authorization: `Bearer ${token}` },
     cache: "no-store",
     signal: controller.signal
@@ -1267,7 +1272,7 @@ async function fetchUserLiveAudio() {
   if (liveAudioFetchController) liveAudioFetchController.abort();
   const controller = new AbortController();
   liveAudioFetchController = controller;
-  const response = await fetch(apiUrl(`/api/live/${encodeURIComponent(selected.id)}/audio?t=${Date.now()}`), {
+  const response = await fetch(liveApiUrl(`/api/live/${encodeURIComponent(selected.id)}/audio?t=${Date.now()}`), {
     headers: { Authorization: `Bearer ${token}` },
     cache: "no-store",
     signal: controller.signal
@@ -1295,12 +1300,11 @@ async function startUserLiveAudio() {
     };
     poll();
   };
-  const wsBase = (API_BASE || location.origin).replace("https://", "wss://").replace("http://", "ws://");
-  if ((API_BASE || location.origin).includes("vercel.app")) {
+  if (!persistentLiveConfigured() && (API_BASE || location.origin).includes("vercel.app")) {
     startAudioPolling();
     return;
   }
-  audioWs = new WebSocket(`${wsBase}/ws/live-audio?deviceId=${encodeURIComponent(selected.id)}&adminToken=${encodeURIComponent(token)}`);
+  audioWs = new WebSocket(liveWsUrl(`/ws/live-audio?deviceId=${encodeURIComponent(selected.id)}&adminToken=${encodeURIComponent(token)}`));
   audioWs.binaryType = "arraybuffer";
   audioWs.onmessage = (event) => playUserPcmChunk(event.data, 16000);
   audioWs.onerror = () => {
@@ -1350,12 +1354,11 @@ function openLive(mode = "screen") {
     };
     poll();
   };
-  const wsBase = (API_BASE || location.origin).replace("https://", "wss://").replace("http://", "ws://");
-  if ((API_BASE || location.origin).includes("vercel.app")) {
+  if (!persistentLiveConfigured() && (API_BASE || location.origin).includes("vercel.app")) {
     startPolling();
     return;
   }
-  ws = new WebSocket(`${wsBase}/ws/live?deviceId=${selected.id}&adminToken=${encodeURIComponent(token)}`);
+  ws = new WebSocket(liveWsUrl(`/ws/live?deviceId=${encodeURIComponent(selected.id)}&adminToken=${encodeURIComponent(token)}`));
   ws.binaryType = "blob";
   ws.onopen = () => {
     if (livePollTimer) clearTimeout(livePollTimer);
