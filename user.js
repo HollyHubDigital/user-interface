@@ -23,7 +23,8 @@ let userRecordings = [];
 let activeUserRecordingId = localStorage.getItem("cpUserActiveRecordingId") || "";
 
 const APP_CONFIG = window.CP_DEVICE_CONFIG || {};
-const API_BASE = (APP_CONFIG.API_BASE_URL || window.location.origin).replace(/\/$/, "");
+const DEFAULT_BACKEND_BASE = "https://shied.onrender.com";
+const API_BASE = (APP_CONFIG.API_BASE_URL || DEFAULT_BACKEND_BASE).replace(/\/$/, "");
 const LIVE_BASE = (APP_CONFIG.LIVE_BASE_URL || API_BASE || window.location.origin).replace(/\/$/, "");
 const $ = (id) => document.getElementById(id);
 const apiUrl = (path) => `${API_BASE}${path}`;
