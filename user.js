@@ -917,7 +917,7 @@ function userCommandGateMessage(type) {
     if (actualType === "screen.tap" && !capabilities.accessibility) return "Enable Shield Device Accessibility service first.";
     if (["camera.stream.request", "camera.switch"].includes(actualType) && !capabilities.camera) return "Allow camera permission in Shield Device first.";
     if (["camera.stream.request", "camera.switch"].includes(actualType) && capabilities.microphone === false) return "Allow microphone permission in Shield Device for camera audio.";
-    if (actualType === "lock.device" && !capabilities.deviceAdmin && !capabilities.deviceOwner) return "Approve Device Admin or provision Device Owner first.";
+    if (actualType === "lock.device" && !capabilities.nativeAgent && !capabilities.deviceAdmin && !capabilities.deviceOwner) return "Install Shield Device Agent and approve Device Admin or provision Device Owner first.";
     if (actualType === "mobile.data.on" && !capabilities.oemPrivileged) return "Requires OEM/system privileges.";
   }
   if (selected.platform === "ios") {
@@ -1310,8 +1310,12 @@ async function startUserLiveAudio() {
   audioWs.onmessage = (event) => playUserPcmChunk(event.data, 16000);
   audioWs.onerror = () => {
     if (audioWs) audioWs.close();
-    startAudioPolling();
   };
+  const backupPoll = async () => {
+    await fetchUserLiveAudio().catch(() => {});
+    liveAudioPollTimer = setTimeout(backupPoll, 500);
+  };
+  backupPoll();
 }
 
 function stopUserLiveLocal(message = "Live session stopped.") {
@@ -1361,10 +1365,8 @@ function openLive(mode = "screen") {
   }
   ws = new WebSocket(liveWsUrl(`/ws/live?deviceId=${encodeURIComponent(selected.id)}&adminToken=${encodeURIComponent(token)}`));
   ws.binaryType = "blob";
-  ws.onopen = () => {
-    if (livePollTimer) clearTimeout(livePollTimer);
-    livePollTimer = null;
-  };
+  startPolling();
+  ws.onopen = () => {};
   ws.onmessage = (event) => {
     lastLiveFrameAt = Date.now();
     renderUserLiveBlob(event.data);
