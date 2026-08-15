@@ -506,3 +506,7 @@ img:not([src]), img[src=""] {
 .lost-message-form textarea { min-height: 86px; resize: vertical; }
 .danger { background: linear-gradient(135deg, #7a2020, #ef4444); }
 @media (max-width: 520px) { .lost-mode-actions { grid-template-columns: 1fr; } }
+
+.live-video { display: none; width: 100%; height: 100%; max-width: 100%; max-height: 100%; object-fit: contain; border-radius: 20px; background: #000; }
+.live-video.active { display: block; }
+.live-video.active + img, .user-live:has(.live-video.active) img { display: none; }

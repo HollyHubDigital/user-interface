@@ -18,6 +18,10 @@ let userLastLiveFrameUpdatedAt = "";
 let userLiveAudioContext = null;
 let userLiveAudioNextTime = 0;
 let userLastLiveAudioUpdatedAt = "";
+let userWebRtcPeer = null;
+let userWebRtcSignal = null;
+let userWebRtcConnectTimer = null;
+let userWebRtcVideoEl = null;
 let pendingEnrollmentLink = localStorage.getItem("cpPendingEnrollmentLink") || "";
 let userDevices = [];
 let userCommands = [];
@@ -318,6 +322,7 @@ function clearSession(message = "") {
     ws = null;
   }
   stopUserLiveAudio();
+  stopUserWebRtcLive();
   if (livePollTimer) {
     clearTimeout(livePollTimer);
     livePollTimer = null;
@@ -1224,6 +1229,101 @@ function renderUserLiveBlob(blob) {
   probe.src = url;
 }
 
+
+function getUserWebRtcVideoElement() {
+  const liveHost = $("userLive");
+  if (!liveHost) return null;
+  if (!userWebRtcVideoEl) {
+    userWebRtcVideoEl = document.createElement("video");
+    userWebRtcVideoEl.id = "userLiveVideo";
+    userWebRtcVideoEl.className = "live-video";
+    userWebRtcVideoEl.autoplay = true;
+    userWebRtcVideoEl.playsInline = true;
+    userWebRtcVideoEl.controls = false;
+    userWebRtcVideoEl.muted = false;
+    liveHost.insertBefore(userWebRtcVideoEl, userFrameEl || liveHost.firstChild);
+  }
+  return userWebRtcVideoEl;
+}
+
+function sendUserWebRtcSignal(payload) {
+  if (userWebRtcSignal && userWebRtcSignal.readyState === WebSocket.OPEN) userWebRtcSignal.send(JSON.stringify(payload));
+}
+
+function stopUserWebRtcLive() {
+  if (userWebRtcConnectTimer) clearTimeout(userWebRtcConnectTimer);
+  userWebRtcConnectTimer = null;
+  try { if (userWebRtcSignal) userWebRtcSignal.close(); } catch {}
+  try { if (userWebRtcPeer) userWebRtcPeer.close(); } catch {}
+  userWebRtcSignal = null;
+  userWebRtcPeer = null;
+  if (userWebRtcVideoEl) {
+    try { if (userWebRtcVideoEl.srcObject) userWebRtcVideoEl.srcObject.getTracks().forEach((track) => track.stop()); } catch {}
+    userWebRtcVideoEl.srcObject = null;
+    userWebRtcVideoEl.classList.remove("active");
+  }
+}
+
+async function loadUserWebRtcConfig() {
+  const response = await fetch(apiUrl("/api/webrtc/config"), { headers: { Authorization: `Bearer ${token}` }, cache: "no-store" });
+  if (!response.ok) throw new Error("WebRTC config unavailable");
+  return response.json();
+}
+
+async function tryUserWebRtcLive(mode, fallback) {
+  if (!selected || !window.RTCPeerConnection || !window.WebSocket) { fallback(); return false; }
+  stopUserWebRtcLive();
+  const config = await loadUserWebRtcConfig().catch(() => null);
+  if (!config) { fallback(); return false; }
+  const timeoutMs = Math.max(8000, Math.min(12000, Number(config.timeoutMs || 10000)));
+  const retryMs = Math.max(30000, Number(config.retryMs || 45000));
+  const video = getUserWebRtcVideoElement();
+  let connected = false;
+  let fallbackStarted = false;
+  const startFallback = () => {
+    if (fallbackStarted || connected) return;
+    fallbackStarted = true;
+    stopUserWebRtcLive();
+    fallback();
+    userWebRtcConnectTimer = setTimeout(() => tryUserWebRtcLive(mode, () => {}).catch(() => {}), retryMs);
+  };
+  userWebRtcPeer = new RTCPeerConnection({ iceServers: config.iceServers || [] });
+  userWebRtcPeer.addTransceiver("video", { direction: "recvonly" });
+  if (mode === "camera") userWebRtcPeer.addTransceiver("audio", { direction: "recvonly" });
+  userWebRtcPeer.onicecandidate = (event) => { if (event.candidate) sendUserWebRtcSignal({ type: "candidate", candidate: event.candidate }); };
+  userWebRtcPeer.ontrack = (event) => {
+    connected = true;
+    if (livePollTimer) clearTimeout(livePollTimer);
+    livePollTimer = null;
+    stopUserLiveAudio();
+    if (video) {
+      video.srcObject = event.streams[0];
+      video.classList.add("active");
+      if (userFrameEl) userFrameEl.alt = mode === "camera" ? "WebRTC camera stream active." : "WebRTC screen stream active.";
+    }
+  };
+  userWebRtcPeer.onconnectionstatechange = () => {
+    if (["failed", "closed", "disconnected"].includes(userWebRtcPeer.connectionState)) startFallback();
+  };
+  userWebRtcSignal = new WebSocket(liveWsUrl(`/ws/webrtc-viewer?deviceId=${encodeURIComponent(selected.id)}&mode=${encodeURIComponent(mode)}&adminToken=${encodeURIComponent(token)}`));
+  userWebRtcSignal.onmessage = async (event) => {
+    let message;
+    try { message = JSON.parse(event.data); } catch { return; }
+    if (message.type === "answer" && message.sdp) await userWebRtcPeer.setRemoteDescription(message.sdp).catch(() => startFallback());
+    if (message.type === "candidate" && message.candidate) await userWebRtcPeer.addIceCandidate(message.candidate).catch(() => {});
+    if (message.type === "device.disconnected") startFallback();
+  };
+  userWebRtcSignal.onerror = startFallback;
+  userWebRtcSignal.onopen = async () => {
+    try {
+      const offer = await userWebRtcPeer.createOffer();
+      await userWebRtcPeer.setLocalDescription(offer);
+      sendUserWebRtcSignal({ type: "offer", sdp: userWebRtcPeer.localDescription, mode });
+    } catch { startFallback(); }
+  };
+  userWebRtcConnectTimer = setTimeout(startFallback, timeoutMs);
+  return true;
+}
 async function fetchUserLiveFrame() {
   if (!selected) return;
   if (liveFetchController) liveFetchController.abort();
@@ -1302,6 +1402,7 @@ async function fetchUserLiveAudio() {
 async function startUserLiveAudio() {
   await ensureUserLiveAudioContext();
   stopUserLiveAudio();
+  stopUserWebRtcLive();
   await ensureUserLiveAudioContext();
   const startAudioPolling = () => {
     if (liveAudioPollTimer) return;
@@ -1334,6 +1435,7 @@ function stopUserLiveLocal(message = "Live session stopped.") {
   if (liveFallbackTimer) clearTimeout(liveFallbackTimer);
   if (liveFetchController) liveFetchController.abort();
   stopUserLiveAudio();
+  stopUserWebRtcLive();
   ws = null;
   livePollTimer = null;
   liveFallbackTimer = null;
@@ -1345,15 +1447,7 @@ function stopUserLiveLocal(message = "Live session stopped.") {
     userFrameEl.alt = message;
   }
 }
-function openLive(mode = "screen") {
-  if (ws) ws.close();
-  if (audioWs) audioWs.close();
-  if (livePollTimer) clearTimeout(livePollTimer);
-  if (liveFallbackTimer) clearTimeout(liveFallbackTimer);
-  livePollTimer = null;
-  liveFallbackTimer = null;
-  lastLiveFrameAt = 0;
-  resetUserLiveFrameState();
+function startUserJpegLive(mode = "screen") {
   if (mode === "camera") startUserLiveAudio().catch(() => {});
   else stopUserLiveAudio();
   const startPolling = () => {
@@ -1391,6 +1485,18 @@ function openLive(mode = "screen") {
   }, 1200);
 }
 
+function openLive(mode = "screen") {
+  if (ws) ws.close();
+  if (audioWs) audioWs.close();
+  if (livePollTimer) clearTimeout(livePollTimer);
+  if (liveFallbackTimer) clearTimeout(liveFallbackTimer);
+  livePollTimer = null;
+  liveFallbackTimer = null;
+  lastLiveFrameAt = 0;
+  resetUserLiveFrameState();
+  if (userFrameEl) userFrameEl.alt = "Trying WebRTC live stream. JPEG fallback starts automatically if it cannot connect.";
+  tryUserWebRtcLive(mode, () => startUserJpegLive(mode)).catch(() => startUserJpegLive(mode));
+}
 if (userStartRecordingEl) userStartRecordingEl.onclick = () => startUserRecording().catch((error) => alert(error.message));
 if (userStopRecordingEl) userStopRecordingEl.onclick = () => stopUserRecording().catch((error) => alert(error.message));
 if (userSaveRecordingEl) userSaveRecordingEl.onclick = () => saveUserRecording().catch((error) => alert(error.message));
