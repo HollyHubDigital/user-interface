@@ -1293,6 +1293,10 @@ async function saveUserRecording() {
   const body = await api(`/api/recordings/${encodeURIComponent(activeUserRecordingId)}/save`, { method: "POST", body: JSON.stringify({ deviceId: selected && selected.id }) });
   activeUserRecordingId = "";
   localStorage.removeItem("cpUserActiveRecordingId");
+  if (body.recording) {
+    userRecordings = [body.recording, ...userRecordings.filter((recording) => recording.id !== body.recording.id)];
+    renderUserRecordings();
+  }
   if (userRecordingStatusEl) userRecordingStatusEl.textContent = body.github && body.github.skipped ? `Saved locally: ${body.github.reason}` : "Recording saved.";
   await loadDashboard();
 }

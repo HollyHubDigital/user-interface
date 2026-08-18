@@ -152,15 +152,6 @@ button {
   border-radius: 999px;
 }
 
-.toggle-password::before {
-  content: "ðŸ‘";
-  font-size: 1rem;
-}
-
-.toggle-password.password-visible::before {
-  content: "ðŸ™ˆ";
-}
-
 a {
   color: #ffd19b;
   cursor: pointer;
@@ -512,3 +503,32 @@ img:not([src]), img[src=""] {
 .live-video.active + img, .user-live:has(.live-video.active) img { display: none; }
 .section-actions { display: flex; justify-content: flex-end; gap: 10px; flex-wrap: wrap; margin: 0 0 12px; }
 .section-actions button { margin: 2px; }
+
+
+/* Dashboard icon treatment: presentation only; button handlers remain unchanged. */
+.toggle-password::before { content: ""; width: 19px; height: 11px; border: 2px solid #fff; border-radius: 999px / 70%; }
+.toggle-password::after { content: ""; position: absolute; width: 5px; height: 5px; border-radius: 50%; background: #fff; }
+.toggle-password { position: relative; }
+.toggle-password.password-visible::before { border-color: #ffd19b; }
+.toggle-password.password-visible::after { background: #ffd19b; box-shadow: 0 0 0 1px #f58f20; }
+button::before { display: inline-block; margin-right: 7px; font-size: 1.05em; line-height: 1; vertical-align: -0.08em; }
+#logoutUser::before { content: "\21B1"; color: #ffd19b; }
+#enrollUser::before { content: "\21E9"; color: #fff; }
+#openAgentUser::before { content: "\2197"; color: #ffd19b; }
+button[data-feature="screen.control.request"]::before { content: "\25A3"; color: #8ee6ff; }
+button[data-feature="camera.stream.request"]::before { content: "\25C9"; color: #ffe082; }
+button[data-feature="file.list"]::before { content: "\25A1"; color: #ffd19b; }
+button[data-feature="locate.device"]::before { content: "\25CE"; color: #8ee6ff; }
+button[data-feature="lock.device"]::before { content: "\25A0"; color: #ffd19b; }
+button[data-feature="mobile.data.on"]::before { content: "\21C5"; color: #a7f3d0; }
+button[data-feature="lost.ring"]::before { content: "\266A"; color: #ffe082; }
+button[data-feature="live.stop"]::before { content: "\23FB"; color: #fecaca; }
+#home::before { content: "\2302"; color: #ffd19b; }
+#userRefreshDeviceInfo::before { content: "\21BB"; color: #ffd19b; }
+.record-actions button { font-size: 0; display: inline-grid; place-items: center; box-shadow: inset 0 0 0 1px rgba(255,255,255,.22), 0 8px 18px rgba(0,0,0,.25); }
+.record-actions button::before { margin: 0; font-size: 17px; }
+.record-start::before { content: "\25CF"; color: #d1fae5; text-shadow: 0 0 10px rgba(209,250,229,.8); }
+.record-stop::before { content: "\25A0"; color: #fee2e2; text-shadow: 0 0 10px rgba(254,226,226,.8); }
+.record-save::before { content: "\21E9"; color: #fef3c7; text-shadow: 0 0 10px rgba(254,243,199,.75); }
+.record-actions button:hover { transform: translateY(-1px); filter: brightness(1.1); }
+button:disabled::before { color: currentColor; text-shadow: none; }
