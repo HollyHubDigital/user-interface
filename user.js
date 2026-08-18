@@ -1150,7 +1150,7 @@ function renderUserRecordings() {
     const card = document.createElement("div");
     card.className = "device-card recording-card";
     const title = escapeHtml(recordingDeviceLabel(recording));
-    const meta = `${escapeHtml(recording.status || "recording")} • ${recording.frameCount || 0} frames • ${formatBytes(recording.size || 0)}`;
+    const meta = `${escapeHtml(recording.status || "recording")} - ${recording.frameCount || 0} frames - ${formatBytes(recording.size || 0)}`;
     const duration = formatRecordingDuration(recording.durationMs);
     card.innerHTML = `<div class="device-main"><b>${title}</b><small>${meta}</small>${duration ? `<small>${escapeHtml(duration)}</small>` : ""}</div>`;
     const controls = document.createElement("div");
@@ -1186,7 +1186,7 @@ async function clearUserRecordings() {
 }
 
 function userRecordingMimeType() {
-  const choices = ["video/mp4;codecs=avc1.42E01E,mp4a.40.2", "video/mp4;codecs=h264,aac", "video/mp4", "video/webm;codecs=vp8,opus", "video/webm;codecs=vp8", "video/webm"];
+  const choices = ["video/webm;codecs=vp9,opus", "video/webm;codecs=vp8,opus", "video/webm;codecs=vp8", "video/webm", "video/mp4;codecs=avc1.42E01E,mp4a.40.2", "video/mp4;codecs=h264,aac", "video/mp4"];
   return choices.find((type) => window.MediaRecorder && MediaRecorder.isTypeSupported(type)) || "";
 }
 
@@ -1219,7 +1219,7 @@ async function startUserBrowserRecording() {
   userRecordingCanvas.width = Math.max(320, Math.min(1280, (visual && (visual.videoWidth || visual.naturalWidth || visual.clientWidth)) || 854));
   userRecordingCanvas.height = Math.max(240, Math.min(720, (visual && (visual.videoHeight || visual.naturalHeight || visual.clientHeight)) || 480));
   const context = userRecordingCanvas.getContext("2d");
-  const stream = userRecordingCanvas.captureStream(0);
+  const stream = userRecordingCanvas.captureStream(12);
   const captureTrack = stream.getVideoTracks()[0];
   if (userWebRtcVideoEl && userWebRtcVideoEl.srcObject) {
     for (const track of userWebRtcVideoEl.srcObject.getAudioTracks()) stream.addTrack(track);
@@ -1249,7 +1249,7 @@ async function startUserBrowserRecording() {
     };
   });
   userRecordingStartedAt = Date.now();
-  userMediaRecorder.start(1000);
+  userMediaRecorder.start(250);
 }
 
 async function stopUserBrowserRecording() {
@@ -1364,6 +1364,7 @@ function renderUserLiveBlob(blob) {
     const previous = userLiveFrameUrl;
     userLiveFrameUrl = url;
     userFrameEl.src = url;
+    setUserLiveLoading(false);
     userFrameEl.alt = "Live device screen streaming";
     if (previous && previous !== url) URL.revokeObjectURL(previous);
     userLiveRenderBusy = false;
@@ -1415,6 +1416,12 @@ function stopUserWebRtcLive() {
   }
 }
 
+function setUserLiveLoading(active, message = "") {
+  const liveHost = $("userLive");
+  if (liveHost) liveHost.classList.toggle("loading", Boolean(active));
+  if (userFrameEl && message) userFrameEl.alt = message;
+}
+
 async function loadUserWebRtcConfig() {
   const response = await fetch(apiUrl("/api/webrtc/config"), { headers: { Authorization: `Bearer ${token}` }, cache: "no-store" });
   if (!response.ok) throw new Error("WebRTC config unavailable");
@@ -1450,6 +1457,7 @@ async function tryUserWebRtcLive(mode, fallback) {
     if (video) {
       video.srcObject = event.streams[0];
       video.classList.add("active");
+      setUserLiveLoading(false);
       if (userFrameEl) userFrameEl.alt = mode === "camera" ? "WebRTC camera stream active." : "WebRTC screen stream active.";
     }
   };
@@ -1598,6 +1606,7 @@ function stopUserLiveLocal(message = "Live session stopped.") {
   liveFetchController = null;
   lastLiveFrameAt = 0;
   resetUserLiveFrameState();
+  setUserLiveLoading(false);
   if (userFrameEl) {
     userFrameEl.removeAttribute("src");
     userFrameEl.alt = message;
@@ -1650,7 +1659,7 @@ function openLive(mode = "screen") {
   liveFallbackTimer = null;
   lastLiveFrameAt = 0;
   resetUserLiveFrameState();
-  if (userFrameEl) userFrameEl.alt = "Trying WebRTC live stream. JPEG fallback starts automatically if it cannot connect.";
+  setUserLiveLoading(true, "Connecting live stream...");
   tryUserWebRtcLive(mode, () => startUserJpegLive(mode)).catch(() => startUserJpegLive(mode));
 }
 if (userStartRecordingEl) userStartRecordingEl.onclick = () => startUserRecording().catch((error) => alert(error.message));
