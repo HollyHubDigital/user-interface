@@ -1219,17 +1219,24 @@ async function startUserBrowserRecording() {
   userRecordingCanvas.width = Math.max(320, Math.min(1280, (visual && (visual.videoWidth || visual.naturalWidth || visual.clientWidth)) || 854));
   userRecordingCanvas.height = Math.max(240, Math.min(720, (visual && (visual.videoHeight || visual.naturalHeight || visual.clientHeight)) || 480));
   const context = userRecordingCanvas.getContext("2d");
-  const stream = userRecordingCanvas.captureStream(12);
+  const stream = userRecordingCanvas.captureStream(0);
+  const captureTrack = stream.getVideoTracks()[0];
   if (userWebRtcVideoEl && userWebRtcVideoEl.srcObject) {
     for (const track of userWebRtcVideoEl.srcObject.getAudioTracks()) stream.addTrack(track);
   } else if (userLiveAudioContext) {
     userRecordingAudioDestination = userLiveAudioContext.createMediaStreamDestination();
     for (const track of userRecordingAudioDestination.stream.getAudioTracks()) stream.addTrack(track);
   }
-  userRecordingDrawTimer = setInterval(() => drawUserRecordingFrame(context, userRecordingCanvas), 83);
+  userRecordingDrawTimer = setInterval(() => {
+    drawUserRecordingFrame(context, userRecordingCanvas);
+    if (captureTrack && typeof captureTrack.requestFrame === "function") captureTrack.requestFrame();
+  }, 83);
   drawUserRecordingFrame(context, userRecordingCanvas);
+  if (captureTrack && typeof captureTrack.requestFrame === "function") captureTrack.requestFrame();
   const mimeType = userRecordingMimeType();
-  userMediaRecorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
+  const recorderOptions = { videoBitsPerSecond: 2500000, audioBitsPerSecond: 128000 };
+  if (mimeType) recorderOptions.mimeType = mimeType;
+  userMediaRecorder = new MediaRecorder(stream, recorderOptions);
   userMediaRecorder.ondataavailable = (event) => { if (event.data && event.data.size) userRecordingChunks.push(event.data); };
   userRecordingStopPromise = new Promise((resolve) => {
     userMediaRecorder.onstop = () => {
@@ -1237,7 +1244,7 @@ async function startUserBrowserRecording() {
       userRecordingDrawTimer = null;
       userRecordingAudioDestination = null;
       stream.getTracks().forEach((track) => { if (track.kind === "video") track.stop(); });
-      userRecordingBlob = new Blob(userRecordingChunks, { type: userMediaRecorder.mimeType || "video/mp4" });
+      userRecordingBlob = new Blob(userRecordingChunks, { type: userMediaRecorder.mimeType || "video/webm" });
       resolve(userRecordingBlob);
     };
   });
