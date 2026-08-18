@@ -34,6 +34,7 @@ let userDevices = [];
 let userCommands = [];
 let userRecordings = [];
 let activeUserRecordingId = localStorage.getItem("cpUserActiveRecordingId") || "";
+let activeUserFileBrowserCommandId = "";
 
 const APP_CONFIG = window.CP_DEVICE_CONFIG || {};
 const DEFAULT_BACKEND_BASE = "https://shied.onrender.com";
@@ -920,7 +921,7 @@ function renderUserCommandResults() {
     modal.dataset.commandId = latestLocate.id;
     showLocationModal(location);
   }
-  const latestList = [...selectedCommands].reverse().find((command) => command.type === "file.list" && command.results && command.results[selected.id]);
+  const latestList = (activeUserFileBrowserCommandId && userCommands.find((command) => command.id === activeUserFileBrowserCommandId && command.type === "file.list" && command.results && command.results[selected.id])) || [...selectedCommands].reverse().find((command) => command.type === "file.list" && command.results && command.results[selected.id]);
   const listed = latestList && parseOutputJson(latestList.results[selected.id].output);
   if (listed && listed.error && userFilesEl) {
     userFilesEl.innerHTML = `<h2>Device Files</h2><p class="hint">${escapeHtml(listed.error)}</p>`;
@@ -1013,6 +1014,7 @@ async function runUserFileCommand(type = "file.list", path = "/sdcard") {
   showUserFilesModal(type === "file.list" ? `Browsing ${path}... waiting for the enrolled agent.` : `Exporting ${path}... waiting for the enrolled agent.`);
   const queued = await command(type, { path, requestedAt: new Date().toISOString() });
   if (!queued) return;
+  if (type === "file.list") activeUserFileBrowserCommandId = queued.id;
   const { result } = await waitForUserCommandResult(queued.id, selected.id);
   if (!result) { if (userFilesStatusEl) userFilesStatusEl.textContent = "Still waiting for the enrolled agent. Try again if the device is offline."; return; }
   if (type === "file.pull") {
@@ -1025,7 +1027,7 @@ async function runUserFileCommand(type = "file.list", path = "/sdcard") {
     if (userFilesStatusEl) userFilesStatusEl.textContent = listed.error || `Listed ${listed.files.length} item(s) from ${path}.`;
     if (listed.error && userFilesModalContentEl) userFilesModalContentEl.innerHTML = `<p class="hint">${escapeHtml(listed.error)}</p>`;
     else renderUserFileList(listed.files, userFilesModalContentEl);
-    await loadDashboard();
+    renderUserCommandResults();
   } else if (userFilesStatusEl) {
     userFilesStatusEl.textContent = result.output ? String(result.output) : "No file list returned.";
   }
@@ -1170,7 +1172,7 @@ async function clearUserRecordings() {
   if (!confirm("Clear all saved recordings? This deletes them from the backend too.")) return;
   await api("/api/recordings", { method: "DELETE" });
   activeUserRecordingId = "";
-  localStorage.removeItem("userActiveRecordingId");
+  localStorage.removeItem("cpUserActiveRecordingId");
   await loadDashboard();
 }
 
@@ -1247,7 +1249,7 @@ async function uploadUserBrowserRecording(recordingId) {
   if (!blob || !blob.size) throw new Error("No recording data captured. Start live video first, then start recording after frames are visible.");
   const response = await fetch(apiUrl(`/api/recordings/${encodeURIComponent(recordingId)}/upload`), {
     method: "POST",
-    headers: { Authorization: `Bearer ${token}`, "Content-Type": blob.type || "video/mp4" },
+    headers: { Authorization: `Bearer ${token}`, "Content-Type": blob.type || "video/mp4", "X-Device-Id": selected ? selected.id : "" },
     body: blob
   });
   const body = await readJsonResponse(response);
