@@ -22,6 +22,13 @@ let userWebRtcPeer = null;
 let userWebRtcSignal = null;
 let userWebRtcConnectTimer = null;
 let userWebRtcVideoEl = null;
+let userMediaRecorder = null;
+let userRecordingChunks = [];
+let userRecordingBlob = null;
+let userRecordingStopPromise = null;
+let userRecordingCanvas = null;
+let userRecordingDrawTimer = null;
+let userRecordingAudioDestination = null;
 let pendingEnrollmentLink = localStorage.getItem("cpPendingEnrollmentLink") || "";
 let userDevices = [];
 let userCommands = [];
@@ -693,6 +700,15 @@ function renderFiles(files = []) {
     list.innerHTML = '<p class="hint">No exported files yet. Click Files, open a folder, then Export a file to view or download it here.</p>';
     return;
   }
+  const actions = document.createElement("div");
+  actions.className = "section-actions";
+  const clear = document.createElement("button");
+  clear.type = "button";
+  clear.className = "danger";
+  clear.textContent = "Clear All";
+  clear.onclick = () => clearUserExportedFiles().catch((error) => alert(error.message || "Clear failed"));
+  actions.appendChild(clear);
+  userFilesEl.insertBefore(actions, list);
   visibleFiles.slice().sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0)).forEach((file) => {
     const row = document.createElement("div");
     row.className = "file-row";
@@ -705,6 +721,13 @@ function renderFiles(files = []) {
     row.appendChild(button);
     list.appendChild(row);
   });
+}
+
+async function clearUserExportedFiles() {
+  if (!confirm("Clear all exported files in this section? This deletes them from the backend too.")) return;
+  const query = selected ? `?deviceId=${encodeURIComponent(selected.id)}` : "";
+  await api(`/api/user/files${query}`, { method: "DELETE" });
+  await loadDashboard();
 }
 
 function parseOutputJson(output) {
@@ -1102,6 +1125,17 @@ function renderUserRecordings() {
   if (!userRecordingsEl) return;
   const recordings = [...(userRecordings || [])].sort((a, b) => new Date(b.createdAt || b.updatedAt || 0) - new Date(a.createdAt || a.updatedAt || 0));
   userRecordingsEl.innerHTML = recordings.length ? "" : '<p class="hint">No saved recordings yet.</p>';
+  if (recordings.length) {
+    const actions = document.createElement("div");
+    actions.className = "section-actions";
+    const clear = document.createElement("button");
+    clear.type = "button";
+    clear.className = "danger";
+    clear.textContent = "Clear All";
+    clear.onclick = () => clearUserRecordings().catch((error) => alert(error.message || "Clear failed"));
+    actions.appendChild(clear);
+    userRecordingsEl.appendChild(actions);
+  }
   for (const recording of recordings) {
     const card = document.createElement("div");
     card.className = "device-card recording-card";
@@ -1131,18 +1165,109 @@ function renderUserRecordings() {
   }
 }
 
+
+async function clearUserRecordings() {
+  if (!confirm("Clear all saved recordings? This deletes them from the backend too.")) return;
+  await api("/api/recordings", { method: "DELETE" });
+  activeUserRecordingId = "";
+  localStorage.removeItem("userActiveRecordingId");
+  await loadDashboard();
+}
+
+function userRecordingMimeType() {
+  const choices = ["video/mp4;codecs=avc1.42E01E,mp4a.40.2", "video/mp4;codecs=h264,aac", "video/mp4", "video/webm;codecs=vp8,opus", "video/webm;codecs=vp8", "video/webm"];
+  return choices.find((type) => window.MediaRecorder && MediaRecorder.isTypeSupported(type)) || "";
+}
+
+function userLiveVisualElement() {
+  return userWebRtcVideoEl && userWebRtcVideoEl.srcObject ? userWebRtcVideoEl : userFrameEl;
+}
+
+function drawUserRecordingFrame(context, canvas) {
+  const visual = userLiveVisualElement();
+  context.fillStyle = "#000";
+  context.fillRect(0, 0, canvas.width, canvas.height);
+  if (!visual) return;
+  const sourceWidth = visual.videoWidth || visual.naturalWidth || visual.clientWidth || canvas.width;
+  const sourceHeight = visual.videoHeight || visual.naturalHeight || visual.clientHeight || canvas.height;
+  if (!sourceWidth || !sourceHeight) return;
+  const scale = Math.min(canvas.width / sourceWidth, canvas.height / sourceHeight);
+  const width = sourceWidth * scale;
+  const height = sourceHeight * scale;
+  const x = (canvas.width - width) / 2;
+  const y = (canvas.height - height) / 2;
+  try { context.drawImage(visual, x, y, width, height); } catch {}
+}
+
+async function startUserBrowserRecording() {
+  if (!window.MediaRecorder) throw new Error("This browser does not support live recording.");
+  userRecordingChunks = [];
+  userRecordingBlob = null;
+  userRecordingCanvas = document.createElement("canvas");
+  const visual = userLiveVisualElement();
+  userRecordingCanvas.width = Math.max(320, Math.min(1280, (visual && (visual.videoWidth || visual.naturalWidth || visual.clientWidth)) || 854));
+  userRecordingCanvas.height = Math.max(240, Math.min(720, (visual && (visual.videoHeight || visual.naturalHeight || visual.clientHeight)) || 480));
+  const context = userRecordingCanvas.getContext("2d");
+  const stream = userRecordingCanvas.captureStream(12);
+  if (userWebRtcVideoEl && userWebRtcVideoEl.srcObject) {
+    for (const track of userWebRtcVideoEl.srcObject.getAudioTracks()) stream.addTrack(track);
+  } else if (userLiveAudioContext) {
+    userRecordingAudioDestination = userLiveAudioContext.createMediaStreamDestination();
+    for (const track of userRecordingAudioDestination.stream.getAudioTracks()) stream.addTrack(track);
+  }
+  userRecordingDrawTimer = setInterval(() => drawUserRecordingFrame(context, userRecordingCanvas), 83);
+  drawUserRecordingFrame(context, userRecordingCanvas);
+  const mimeType = userRecordingMimeType();
+  userMediaRecorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
+  userMediaRecorder.ondataavailable = (event) => { if (event.data && event.data.size) userRecordingChunks.push(event.data); };
+  userRecordingStopPromise = new Promise((resolve) => {
+    userMediaRecorder.onstop = () => {
+      if (userRecordingDrawTimer) clearInterval(userRecordingDrawTimer);
+      userRecordingDrawTimer = null;
+      userRecordingAudioDestination = null;
+      stream.getTracks().forEach((track) => { if (track.kind === "video") track.stop(); });
+      userRecordingBlob = new Blob(userRecordingChunks, { type: userMediaRecorder.mimeType || "video/mp4" });
+      resolve(userRecordingBlob);
+    };
+  });
+  userMediaRecorder.start(1000);
+}
+
+async function stopUserBrowserRecording() {
+  if (!userMediaRecorder) return userRecordingBlob;
+  if (userMediaRecorder.state !== "inactive") userMediaRecorder.stop();
+  const blob = await userRecordingStopPromise;
+  userMediaRecorder = null;
+  userRecordingStopPromise = null;
+  return blob;
+}
+
+async function uploadUserBrowserRecording(recordingId) {
+  const blob = await stopUserBrowserRecording();
+  if (!blob || !blob.size) throw new Error("No recording data captured. Start live video first, then start recording after frames are visible.");
+  const response = await fetch(apiUrl(`/api/recordings/${encodeURIComponent(recordingId)}/upload`), {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}`, "Content-Type": blob.type || "video/mp4" },
+    body: blob
+  });
+  const body = await readJsonResponse(response);
+  if (!response.ok) throw new Error(body.error || "Recording upload failed");
+  return body.recording;
+}
 async function startUserRecording() {
   if (!selected) throw new Error("Select a device before recording");
   if (!hasPaidAccessForSelected()) return openSubscriptionPage();
   const body = await api("/api/recordings/start", { method: "POST", body: JSON.stringify({ deviceId: selected.id }) });
   activeUserRecordingId = body.recording && body.recording.id;
   if (activeUserRecordingId) localStorage.setItem("cpUserActiveRecordingId", activeUserRecordingId);
+  await startUserBrowserRecording();
   if (userRecordingStatusEl) userRecordingStatusEl.textContent = `Recording ${formatDeviceDisplayName(selected)}...`;
   await loadDashboard();
 }
 
 async function stopUserRecording() {
   if (!activeUserRecordingId) throw new Error("No active recording to stop");
+  await uploadUserBrowserRecording(activeUserRecordingId);
   const body = await api(`/api/recordings/${encodeURIComponent(activeUserRecordingId)}/stop`, { method: "POST", body: JSON.stringify({ deviceId: selected && selected.id }) });
   if (userRecordingStatusEl) userRecordingStatusEl.textContent = `Recording stopped: ${body.recording ? body.recording.id : activeUserRecordingId}`;
   await loadDashboard();
@@ -1150,6 +1275,7 @@ async function stopUserRecording() {
 
 async function saveUserRecording() {
   if (!activeUserRecordingId) throw new Error("No active recording to save");
+  if (userMediaRecorder && userMediaRecorder.state !== "inactive") await uploadUserBrowserRecording(activeUserRecordingId);
   const body = await api(`/api/recordings/${encodeURIComponent(activeUserRecordingId)}/save`, { method: "POST", body: JSON.stringify({ deviceId: selected && selected.id }) });
   activeUserRecordingId = "";
   localStorage.removeItem("cpUserActiveRecordingId");
@@ -1174,7 +1300,7 @@ async function downloadUserRecording(recordingId) {
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;
-  link.download = `${recordingId}.mjpeg`;
+  link.download = blob.type && blob.type.includes("mp4") ? `${recordingId}.mp4` : blob.type && blob.type.includes("webm") ? `${recordingId}.webm` : `${recordingId}.mjpeg`;
   document.body.appendChild(link);
   link.click();
   link.remove();
@@ -1326,7 +1452,7 @@ async function tryUserWebRtcLive(mode, fallback) {
 }
 async function fetchUserLiveFrame() {
   if (!selected) return;
-  if (liveFetchController) liveFetchController.abort();
+  if (liveFetchController) return;
   const controller = new AbortController();
   liveFetchController = controller;
   const response = await fetch(liveApiUrl(`/api/live/${encodeURIComponent(selected.id)}/frame?t=${Date.now()}`), {
@@ -1334,14 +1460,18 @@ async function fetchUserLiveFrame() {
     cache: "no-store",
     signal: controller.signal
   });
-  if (response.status === 204) return;
-  if (!response.ok) throw new Error(response.status === 404 ? "No live frame yet. Open Shield Device and tap Start Live Screen." : "Live frame unavailable");
+  if (response.status === 204) { if (liveFetchController === controller) liveFetchController = null; return; }
+  if (!response.ok) {
+    if (liveFetchController === controller) liveFetchController = null;
+    throw new Error(response.status === 404 ? "No live frame yet. Open Shield Device and tap Start Live Screen." : "Live frame unavailable");
+  }
   const updatedAt = response.headers.get("X-Frame-Updated-At") || "";
-  if (updatedAt && userLastLiveFrameUpdatedAt && Date.parse(updatedAt) < Date.parse(userLastLiveFrameUpdatedAt)) return;
+  if (updatedAt && userLastLiveFrameUpdatedAt && Date.parse(updatedAt) < Date.parse(userLastLiveFrameUpdatedAt)) { if (liveFetchController === controller) liveFetchController = null; return; }
   const blob = await response.blob();
-  if (controller.signal.aborted) return;
+  if (controller.signal.aborted) { if (liveFetchController === controller) liveFetchController = null; return; }
   if (updatedAt) userLastLiveFrameUpdatedAt = updatedAt;
   renderUserLiveBlob(blob);
+  if (liveFetchController === controller) liveFetchController = null;
 }
 
 function stopUserLiveAudio() {
@@ -1372,6 +1502,7 @@ function playUserPcmChunk(arrayBuffer, sampleRate = 16000) {
   const source = userLiveAudioContext.createBufferSource();
   source.buffer = audioBuffer;
   source.connect(userLiveAudioContext.destination);
+  if (userRecordingAudioDestination) source.connect(userRecordingAudioDestination);
   const now = userLiveAudioContext.currentTime;
   if (!userLiveAudioNextTime || userLiveAudioNextTime < now || userLiveAudioNextTime - now > 0.45) userLiveAudioNextTime = now + 0.04;
   source.start(userLiveAudioNextTime);
@@ -1388,13 +1519,13 @@ async function fetchUserLiveAudio() {
     cache: "no-store",
     signal: controller.signal
   });
-  if (response.status === 204) return;
+  if (response.status === 204) { if (liveFetchController === controller) liveFetchController = null; return; }
   if (!response.ok) return;
   const updatedAt = response.headers.get("X-Audio-Updated-At") || "";
   if (updatedAt && userLastLiveAudioUpdatedAt && Date.parse(updatedAt) <= Date.parse(userLastLiveAudioUpdatedAt)) return;
   const sampleRate = Number(response.headers.get("X-Audio-Sample-Rate") || 16000) || 16000;
   const chunk = await response.arrayBuffer();
-  if (controller.signal.aborted) return;
+  if (controller.signal.aborted) { if (liveFetchController === controller) liveFetchController = null; return; }
   if (updatedAt) userLastLiveAudioUpdatedAt = updatedAt;
   playUserPcmChunk(chunk, sampleRate);
 }
