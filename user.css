@@ -546,3 +546,5 @@ button:disabled::before { color: currentColor; text-shadow: none; }
 }
 .user-live.loading img { opacity: .35; }
 @keyframes live-spin { to { transform: rotate(360deg); } }
+
+.tagline { display: inline-block; margin-top: 5px; color: #ffd19b; font-weight: 900; }

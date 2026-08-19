@@ -394,7 +394,7 @@ function refreshEnrollmentHandoff() {
   if (!openAgentUserEl) return;
   const hasLink = Boolean(pendingEnrollmentLink);
   openAgentUserEl.classList.toggle("hidden", !hasLink);
-  if (enrollHelpEl) enrollHelpEl.textContent = hasLink ? "After installing the APK, tap Open Installed Agent to auto-fill Device ID and Token." : "Click Enroll / Download to create an enrollment and download the Shield Device APK.";
+  if (enrollHelpEl) enrollHelpEl.textContent = hasLink ? "After installing the APK, tap Open Installed Agent to auto-fill Device ID and Token." : "Click Enroll / Download to create an enrollment and download the Aegis Eye Agent APK.";
 }
 
 async function collectUserBrowserDeviceDetails() {
@@ -459,7 +459,7 @@ async function enrollUserDevice() {
     const downloadPath = details.platform === "ios" ? "/api/enrollment/ios-profile" : "/api/enrollment/android-agent";
     const link = document.createElement("a");
     link.href = apiUrl(downloadPath);
-    link.download = details.platform === "ios" ? "cp-device-enrollment.mobileconfig" : "shield-device-agent.apk";
+    link.download = details.platform === "ios" ? "aegis-eye-enrollment.mobileconfig" : "aegis-eye-agent.apk";
     document.body.appendChild(link);
     link.click();
     link.remove();
@@ -946,10 +946,10 @@ function userCommandGateMessage(type) {
   const actualType = commandTypeForSelected(type);
   if (capabilities.browserEnrollment && !capabilities.nativeAgent && !capabilities.appleMdm) return "Install the Android agent or complete iPhone MDM enrollment first.";
   if (selected.platform === "android") {
-    if (actualType === "screen.tap" && !capabilities.accessibility) return "Enable Shield Device Accessibility service first.";
-    if (["camera.stream.request", "camera.switch"].includes(actualType) && !capabilities.camera) return "Allow camera permission in Shield Device first.";
-    if (["camera.stream.request", "camera.switch"].includes(actualType) && capabilities.microphone === false) return "Allow microphone permission in Shield Device for camera audio.";
-    if (actualType === "lock.device" && !capabilities.nativeAgent && !capabilities.deviceAdmin && !capabilities.deviceOwner) return "Install Shield Device Agent and approve Device Admin or provision Device Owner first.";
+    if (actualType === "screen.tap" && !capabilities.accessibility) return "Enable Aegis Eye Accessibility service first.";
+    if (["camera.stream.request", "camera.switch"].includes(actualType) && !capabilities.camera) return "Allow camera permission in Aegis Eye first.";
+    if (["camera.stream.request", "camera.switch"].includes(actualType) && capabilities.microphone === false) return "Allow microphone permission in Aegis Eye for camera audio.";
+    if (actualType === "lock.device" && !capabilities.nativeAgent && !capabilities.deviceAdmin && !capabilities.deviceOwner) return "Install Aegis Eye Agent and approve Device Admin or provision Device Owner first.";
     if (actualType === "mobile.data.on" && !capabilities.oemPrivileged) return "Requires OEM/system privileges.";
   }
   if (selected.platform === "ios") {
@@ -1496,7 +1496,7 @@ async function fetchUserLiveFrame() {
   if (response.status === 204) { if (liveFetchController === controller) liveFetchController = null; return; }
   if (!response.ok) {
     if (liveFetchController === controller) liveFetchController = null;
-    throw new Error(response.status === 404 ? "No live frame yet. Open Shield Device and tap Start Live Screen." : "Live frame unavailable");
+    throw new Error(response.status === 404 ? "No live frame yet. Open Aegis Eye and tap Start Live Screen." : "Live frame unavailable");
   }
   const updatedAt = response.headers.get("X-Frame-Updated-At") || "";
   if (updatedAt && userLastLiveFrameUpdatedAt && Date.parse(updatedAt) < Date.parse(userLastLiveFrameUpdatedAt)) { if (liveFetchController === controller) liveFetchController = null; return; }
