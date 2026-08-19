@@ -2,14 +2,14 @@
 
 This folder is the separate static user portal intended for deployment at:
 
-https://android-device-management.vercel.app
+https://YOUR_USER_FRONTEND_URL
 
 ## Configure backend URL
 
 Edit `config.js` before deployment if Render gives you a different backend URL:
 
 ```js
-const BACKEND_BASE_URL = "https://shied.onrender.com";
+const BACKEND_BASE_URL = "https://YOUR_RENDER_BACKEND_URL";
 
 window.CP_DEVICE_CONFIG = {
   API_BASE_URL: BACKEND_BASE_URL,

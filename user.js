@@ -38,8 +38,7 @@ let activeUserRecordingId = localStorage.getItem("cpUserActiveRecordingId") || "
 let activeUserFileBrowserCommandId = "";
 
 const APP_CONFIG = window.CP_DEVICE_CONFIG || {};
-const DEFAULT_BACKEND_BASE = "https://shied.onrender.com";
-const API_BASE = (APP_CONFIG.API_BASE_URL || DEFAULT_BACKEND_BASE).replace(/\/$/, "");
+const API_BASE = (APP_CONFIG.API_BASE_URL || window.location.origin).replace(/\/$/, "");
 const LIVE_BASE = (APP_CONFIG.LIVE_BASE_URL || API_BASE || window.location.origin).replace(/\/$/, "");
 const $ = (id) => document.getElementById(id);
 const apiUrl = (path) => `${API_BASE}${path}`;
@@ -495,7 +494,7 @@ function openSubscriptionPage() {
 }
 
 function featureRequiresSubscription(type) {
-  return !["screen.control.request", "screen.share.request", "device.info.refresh", "locate.device", "file.list", "file.pull", "live.stop", "lost.ring", "lost.message", "lost.disable", "lock.device"].includes(commandTypeForSelected(type));
+  return Boolean(commandTypeForSelected(type));
 }
 
 const switchAuthButton = $("switchAuth");
@@ -835,6 +834,7 @@ function friendlyCommandLabel(type) {
     "lost.ring": "Lost Mode ring",
     "lost.message": "Lost Mode message",
     "lost.disable": "Disable lost mode",
+    "lost.message.hide": "Hide owner message",
     "live.stop": "Stop live session",
     "mobile.data.on": "Turn on mobile data",
     "device.info.refresh": "Refresh device info",
@@ -860,7 +860,7 @@ function renderCommandResultText(result, command) {
   if (command.type === "file.pull") return "File export requested.";
   if (command.type === "screen.control.request" || command.type === "camera.stream.request") return result.ok ? "Live session started." : "Live session requested.";
   if (command.type === "lock.device") return result.ok ? "Lock command sent." : "Lock command requested.";
-  if (["lost.ring", "lost.message", "lost.disable"].includes(command.type)) return result.output && typeof result.output === "string" ? result.output : "Lost Mode command completed.";
+  if (["lost.ring", "lost.message", "lost.message.hide", "lost.disable"].includes(command.type)) return result.output && typeof result.output === "string" ? result.output : "Lost Mode command completed.";
   if (command.type === "mobile.data.on") return result.ok ? "Mobile data toggle requested." : "Mobile data request queued.";
   if (result.output && typeof result.output === "string") return result.output;
   if (result.output && typeof result.output === "object") return `Result: ${Object.keys(result.output).join(", ")}`;
@@ -955,7 +955,7 @@ function userCommandGateMessage(type) {
   if (selected.platform === "ios") {
     if (!capabilities.appleMdm) return "Install the iPhone MDM profile and complete Apple MDM/APNs enrollment first.";
     if (actualType === "locate.device" && !capabilities.supervised) return "Requires supervised iPhone Lost Mode support.";
-    if (["file.list", "file.pull", "mobile.data.on", "camera.stream.request", "camera.switch", "live.stop", "lost.ring", "lost.message", "lost.disable"].includes(type)) return "Not supported by public Apple MDM APIs.";
+    if (["file.list", "file.pull", "mobile.data.on", "camera.stream.request", "camera.switch", "live.stop", "lost.ring", "lost.message", "lost.message.hide", "lost.disable"].includes(type)) return "Not supported by public Apple MDM APIs.";
   }
   return "";
 }
@@ -975,7 +975,7 @@ function commandTypeForSelected(type) {
 }
 
 function unsupportedIosFeature(type) {
-  return selected && selected.platform === "ios" && ["file.list", "file.pull", "camera.stream.request", "camera.switch", "live.stop", "mobile.data.on", "lost.ring", "lost.message", "lost.disable"].includes(type);
+  return selected && selected.platform === "ios" && ["file.list", "file.pull", "camera.stream.request", "camera.switch", "live.stop", "mobile.data.on", "lost.ring", "lost.message", "lost.message.hide", "lost.disable"].includes(type);
 }
 
 function livePreviewUnavailable() {
@@ -1037,6 +1037,7 @@ async function runUserFileCommand(type = "file.list", path = "/sdcard") {
 async function command(type, payload = {}) {
   if (!selected) return alert("Select device first");
   const actualType = commandTypeForSelected(type);
+  if (featureRequiresSubscription(actualType) && !hasPaidAccessForSelected()) return openSubscriptionPage();
   if (unsupportedIosFeature(type)) {
     alert("This iPhone feature is not available through public Apple MDM APIs. iPhone enrollment supports profile enrollment, app/MDM commands, device lock, supervised Lost Mode location where configured, and screen-share request workflows.");
     return null;
@@ -1054,6 +1055,7 @@ document.querySelectorAll("[data-feature]").forEach((button) => {
     try {
       if (userLostMessageFormEl && userLostMessageFormEl.contains(button)) return;
       const type = button.dataset.feature;
+      if (featureRequiresSubscription(type) && !hasPaidAccessForSelected()) return openSubscriptionPage();
       if (button.dataset.lostAction === "locate") return runUserLocateCommand();
       if (type === "live.stop") {
         const result = await command("live.stop", { requestedAt: new Date().toISOString(), mode: "user-control-session" });
@@ -1063,13 +1065,12 @@ document.querySelectorAll("[data-feature]").forEach((button) => {
       }
       if (type === "locate.device") return runUserLocateCommand();
       if (type === "file.list") return runUserFileCommand("file.list", "/sdcard");
-      if (featureRequiresSubscription(type) && !hasPaidAccessForSelected()) return openSubscriptionPage();
       const payload = { path: "/sdcard", requestedAt: new Date().toISOString() };
-      if (["lost.ring", "lost.disable"].includes(type)) payload.mode = "lost-mode";
+      if (["lost.ring", "lost.message.hide", "lost.disable"].includes(type)) payload.mode = "lost-mode";
       if (type === "camera.stream.request") payload.facing = button.dataset.cameraFacing || "front";
       const result = await command(type, payload);
       if (!result) return;
-      if (["lost.ring", "lost.disable", "lock.device"].includes(type)) alert(friendlyCommandLabel(type) + " queued for " + formatDeviceDisplayName(selected) + ".");
+      if (["lost.ring", "lost.message.hide", "lost.disable", "lock.device"].includes(type)) alert(friendlyCommandLabel(type) + " queued for " + formatDeviceDisplayName(selected) + ".");
       setTimeout(() => loadDashboard().catch(() => {}), 2500);
       if (["screen.control.request", "camera.stream.request"].includes(type) && !livePreviewUnavailable()) openLive(type === "camera.stream.request" ? "camera" : "screen");
       if (type === "screen.control.request" && livePreviewUnavailable()) alert("iPhone screen viewing uses Apple-approved screen-share/MDM workflows. The request was queued; live remote control like Android is not available from a web profile alone.");
@@ -1287,6 +1288,7 @@ async function startUserRecording() {
 }
 
 async function stopUserRecording() {
+  if (!hasPaidAccessForSelected()) return openSubscriptionPage();
   if (!activeUserRecordingId) throw new Error("No active recording to stop");
   await uploadUserBrowserRecording(activeUserRecordingId);
   const body = await api(`/api/recordings/${encodeURIComponent(activeUserRecordingId)}/stop`, { method: "POST", body: JSON.stringify({ deviceId: selected && selected.id }) });
@@ -1295,6 +1297,7 @@ async function stopUserRecording() {
 }
 
 async function saveUserRecording() {
+  if (!hasPaidAccessForSelected()) return openSubscriptionPage();
   if (!activeUserRecordingId) throw new Error("No active recording to save");
   if (userMediaRecorder && userMediaRecorder.state !== "inactive") await uploadUserBrowserRecording(activeUserRecordingId);
   const body = await api(`/api/recordings/${encodeURIComponent(activeUserRecordingId)}/save`, { method: "POST", body: JSON.stringify({ deviceId: selected && selected.id }) });

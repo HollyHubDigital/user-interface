@@ -1,8 +1,9 @@
 {
-  "name": "aegis-eye-user-interface",
-  "version": "1.0.0",
-  "private": true,
-  "scripts": {
-    "check": "node --check user.js"
-  }
+    "name":  "aegis-eye-user-interface",
+    "version":  "1.0.0",
+    "private":  true,
+    "scripts":  {
+                    "build":  "node scripts/generate-config.js",
+                    "check":  "node --check user.js"
+                }
 }

@@ -548,3 +548,5 @@ button:disabled::before { color: currentColor; text-shadow: none; }
 @keyframes live-spin { to { transform: rotate(360deg); } }
 
 .tagline { display: inline-block; margin-top: 5px; color: #ffd19b; font-weight: 900; }
+button[data-feature="lost.message.hide"]::before { content: "\2715"; color: #fecaca; }
+.lost-mode-card > button[data-feature="lost.message.hide"] { width: 100%; margin: 0; }
