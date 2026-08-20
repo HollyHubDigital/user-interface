@@ -170,6 +170,40 @@
         </div>
       </form>
     </dialog>
+
+
+    <dialog id="userFeedbackDialog" class="feedback-dialog">
+      <form method="dialog" class="feedback-card">
+        <div class="feedback-icon" id="feedbackIcon">!</div>
+        <h2 id="feedbackTitle">Notice</h2>
+        <p id="feedbackMessage">Message</p>
+        <div class="feedback-actions">
+          <button id="feedbackCancel" type="button" class="secondary hidden">Cancel</button>
+          <button id="feedbackOk" type="submit">OK</button>
+        </div>
+      </form>
+    </dialog>
+
+    <div id="userChatWidget" class="grant-chat-widget hidden" aria-live="polite">
+      <button id="userChatToggle" class="grant-chat-button" type="button" aria-label="Open support chat">Chat</button>
+      <section id="userChatModal" class="grant-chat-modal hidden" aria-label="Admin support chat">
+        <header class="grant-chat-header">
+          <div>
+            <strong>Aegis Support</strong>
+            <span>Chat privately with admin</span>
+          </div>
+          <button id="userChatClose" type="button" aria-label="Close chat">x</button>
+        </header>
+        <div id="userChatMessages" class="grant-chat-messages">
+          <p class="chat-empty">No messages yet. Send a message to admin.</p>
+        </div>
+        <form id="userChatForm" class="grant-chat-composer">
+          <input id="userChatInput" type="text" maxlength="4000" placeholder="Type your message..." autocomplete="off" />
+          <button type="submit">Send</button>
+        </form>
+      </section>
+    </div>
+
     <script src="config.js"></script>
     <script src="user.js"></script>
   </body>

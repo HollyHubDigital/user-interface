@@ -88,6 +88,19 @@ const authMessageEl = $("authMessage");
 const userRecordingsEl = $("userRecordings");
 const userStartRecordingEl = $("userStartRecording");
 const userStopRecordingEl = $("userStopRecording");
+const userChatWidgetEl = $("userChatWidget");
+const userChatToggleEl = $("userChatToggle");
+const userChatModalEl = $("userChatModal");
+const userChatCloseEl = $("userChatClose");
+const userChatMessagesEl = $("userChatMessages");
+const userChatFormEl = $("userChatForm");
+const userChatInputEl = $("userChatInput");
+const feedbackDialogEl = $("userFeedbackDialog");
+const feedbackTitleEl = $("feedbackTitle");
+const feedbackMessageEl = $("feedbackMessage");
+const feedbackIconEl = $("feedbackIcon");
+const feedbackOkEl = $("feedbackOk");
+const feedbackCancelEl = $("feedbackCancel");
 const userSaveRecordingEl = $("userSaveRecording");
 const userRecordingStatusEl = $("userRecordingStatus");
 const userLostMessageFormEl = $("userLostMessageForm");
@@ -178,11 +191,97 @@ async function api(path, options = {}) {
   return body;
 }
 
+
+function setButtonLoading(button, loading, label = "Working...") {
+  if (!button) return;
+  if (loading) {
+    if (!button.dataset.originalText) button.dataset.originalText = button.textContent || "";
+    button.dataset.loading = "true";
+    button.classList.add("is-loading");
+    button.disabled = true;
+    if (label) button.textContent = label;
+  } else {
+    button.classList.remove("is-loading");
+    button.disabled = false;
+    if (button.dataset.originalText) button.textContent = button.dataset.originalText;
+    delete button.dataset.originalText;
+    delete button.dataset.loading;
+  }
+}
+
+async function withButtonLoading(button, task, label = "Working...") {
+  if (button && button.dataset.loading === "true") return undefined;
+  setButtonLoading(button, true, label);
+  try {
+    return await task();
+  } finally {
+    setButtonLoading(button, false);
+  }
+}
+
+function buttonFromEvent(event, fallback) {
+  return (event && (event.submitter || (event.currentTarget && event.currentTarget.querySelector && event.currentTarget.querySelector("button[type=submit]")))) || fallback || null;
+}
+
+function showAppAlert(message, title = "Notice") {
+  const text = String(message || "");
+  if (!feedbackDialogEl || !feedbackMessageEl || !feedbackOkEl) {
+    console.warn(text);
+    return;
+  }
+  if (feedbackTitleEl) feedbackTitleEl.textContent = title;
+  if (feedbackMessageEl) feedbackMessageEl.textContent = text;
+  if (feedbackIconEl) feedbackIconEl.textContent = title === "Confirm" ? "?" : "!";
+  if (feedbackCancelEl) feedbackCancelEl.classList.add("hidden");
+  feedbackOkEl.textContent = "OK";
+  feedbackOkEl.onclick = null;
+  if (typeof feedbackDialogEl.showModal === "function" && !feedbackDialogEl.open) feedbackDialogEl.showModal();
+}
+
+function showAppConfirm(message, title = "Confirm") {
+  if (!feedbackDialogEl || !feedbackMessageEl || !feedbackOkEl || !feedbackCancelEl) return Promise.resolve(false);
+  if (feedbackTitleEl) feedbackTitleEl.textContent = title;
+  feedbackMessageEl.textContent = String(message || "Are you sure?");
+  if (feedbackIconEl) feedbackIconEl.textContent = "?";
+  feedbackOkEl.textContent = "Continue";
+  feedbackCancelEl.textContent = "Cancel";
+  feedbackCancelEl.classList.remove("hidden");
+  return new Promise((resolve) => {
+    const finish = (value) => {
+      feedbackOkEl.onclick = null;
+      feedbackCancelEl.onclick = null;
+      feedbackDialogEl.removeEventListener("cancel", onCancel);
+      if (feedbackDialogEl.open) feedbackDialogEl.close();
+      resolve(value);
+    };
+    const onCancel = (event) => { event.preventDefault(); finish(false); };
+    feedbackOkEl.onclick = (event) => { event.preventDefault(); finish(true); };
+    feedbackCancelEl.onclick = (event) => { event.preventDefault(); finish(false); };
+    feedbackDialogEl.addEventListener("cancel", onCancel);
+    if (typeof feedbackDialogEl.showModal === "function" && !feedbackDialogEl.open) feedbackDialogEl.showModal();
+  });
+}
+
+window.alert = (message) => showAppAlert(message);
+
+function pulseButton(button) {
+  if (!button || button.disabled || button.classList.contains("is-loading")) return;
+  button.classList.add("loading-pulse");
+  setTimeout(() => button.classList.remove("loading-pulse"), 650);
+}
+
+document.addEventListener("click", (event) => {
+  const button = event.target && event.target.closest ? event.target.closest("button") : null;
+  if (!button || button.type === "submit" || button.dataset.loading === "true") return;
+  pulseButton(button);
+}, true);
 function show(sectionId) {
   ["auth", "dashboard", "subscriptions", "checkout"].forEach((id) => {
     const element = $(id);
     if (element) element.classList.toggle("hidden", id !== sectionId);
   });
+  if (userChatWidgetEl) userChatWidgetEl.classList.toggle("hidden", sectionId !== "dashboard" || !token);
+  if (sectionId !== "dashboard") closeUserChat();
 }
 
 function clearFieldErrors(errors) {
@@ -321,6 +420,79 @@ async function resetFormErrors() {
   clearFieldErrors(resetErrors);
 }
 
+
+let userChatPollTimer = null;
+let userChatOpen = false;
+
+function userChatDisplayTime(value) {
+  const time = Date.parse(value || "");
+  return Number.isFinite(time) ? new Date(time).toLocaleString() : "";
+}
+
+function renderUserChatMessages(messages = []) {
+  if (!userChatMessagesEl) return;
+  userChatMessagesEl.innerHTML = "";
+  if (!messages.length) {
+    const empty = document.createElement("p");
+    empty.className = "chat-empty";
+    empty.textContent = "No messages yet. Send a message to admin.";
+    userChatMessagesEl.appendChild(empty);
+    return;
+  }
+  messages.forEach((message) => {
+    const bubble = document.createElement("div");
+    bubble.className = `chat-bubble ${message.from === "user" ? "chat-bubble-user" : "chat-bubble-admin"}`;
+    const text = document.createElement("p");
+    text.textContent = message.text || "";
+    const meta = document.createElement("span");
+    meta.textContent = `${message.from === "user" ? "You" : "Admin"} - ${userChatDisplayTime(message.createdAt || message.timestamp)}`;
+    bubble.appendChild(text);
+    bubble.appendChild(meta);
+    userChatMessagesEl.appendChild(bubble);
+  });
+  userChatMessagesEl.scrollTop = userChatMessagesEl.scrollHeight;
+}
+
+async function loadUserChat({ markRead = false } = {}) {
+  if (!token || !userChatMessagesEl) return;
+  const response = await api("/api/user/chat");
+  renderUserChatMessages((response.chat && response.chat.messages) || []);
+  if (markRead) await api("/api/user/chat/mark-read", { method: "POST" }).catch(() => {});
+}
+
+function scheduleUserChatPoll() {
+  if (userChatPollTimer) clearTimeout(userChatPollTimer);
+  if (!userChatOpen) return;
+  userChatPollTimer = setTimeout(async () => {
+    try { await loadUserChat({ markRead: true }); } catch (error) { console.warn("User chat refresh failed:", error); }
+    scheduleUserChatPoll();
+  }, 3000);
+}
+
+function openUserChat() {
+  if (!token || !userChatModalEl) return;
+  userChatOpen = true;
+  userChatModalEl.classList.remove("hidden");
+  loadUserChat({ markRead: true }).catch((error) => console.warn("User chat load failed:", error));
+  scheduleUserChatPoll();
+  if (userChatInputEl) userChatInputEl.focus();
+}
+
+function closeUserChat() {
+  userChatOpen = false;
+  if (userChatPollTimer) clearTimeout(userChatPollTimer);
+  userChatPollTimer = null;
+  if (userChatModalEl) userChatModalEl.classList.add("hidden");
+}
+
+async function sendUserChatMessage(event) {
+  event.preventDefault();
+  const text = (userChatInputEl && userChatInputEl.value.trim()) || "";
+  if (!text) return;
+  if (userChatInputEl) userChatInputEl.value = "";
+  const response = await api("/api/user/chat/message", { method: "POST", body: JSON.stringify({ text }) });
+  renderUserChatMessages((response.chat && response.chat.messages) || []);
+}
 function clearSession(message = "") {
   token = "";
   me = null;
@@ -340,6 +512,7 @@ function clearSession(message = "") {
     clearTimeout(liveFallbackTimer);
     liveFallbackTimer = null;
   }
+  closeUserChat();
   localStorage.removeItem("cpUserToken");
   localStorage.removeItem("cpPendingEnrollmentLink");
   if (message) localStorage.setItem("cpUserAuthMessage", message);
@@ -381,10 +554,10 @@ function renderSubscriptionStatus() {
   if (!subscriptionStatusEl || !me) return;
   const subscription = me.subscription || { plan: "free", expiresAt: null };
   if (subscription.plan === "free" || !subscription.expiresAt) {
-    $("subscriptionStatus").textContent = "Plan: Free � screen preview only. Paid features require subscription.";
+    $("subscriptionStatus").textContent = "Plan: Free - screen preview only. Paid features require subscription.";
   } else {
     const active = Date.parse(subscription.expiresAt) > Date.now();
-    $("subscriptionStatus").textContent = active ? `Plan: ${subscription.plan}. Active until ${new Date(subscription.expiresAt).toLocaleDateString()}.` : "Subscription expired � choose a plan to restore access.";
+    $("subscriptionStatus").textContent = active ? `Plan: ${subscription.plan}. Active until ${new Date(subscription.expiresAt).toLocaleDateString()}.` : "Subscription expired - choose a plan to restore access.";
   }
   if (selected && selected.subscriptionOverride && selected.subscriptionOverride.active) {
     subscriptionStatusEl.textContent += " This device has admin-granted paid access override.";
@@ -514,39 +687,45 @@ if (switchAuthButton) {
 if (signupFormEl) {
   signupFormEl.onsubmit = async (event) => {
     event.preventDefault();
-    await resetFormErrors();
-    if (!validateSignupForm()) {
-      updateSignupSubmitState();
-      return;
-    }
-    const normalizedPhone = phoneEl.value.replace(/\s+/g, "");
-    if (!validatePhoneValue(normalizedPhone)) {
-      setFieldError("phone", "Include country code, e.g. +15551234567.");
-      updateSignupSubmitState();
-      return;
-    }
-    const available = await validateSignupAvailability();
-    if (!available) {
-      updateSignupSubmitState();
-      return;
-    }
+    const submitButton = buttonFromEvent(event, signupFormEl);
+    setButtonLoading(submitButton, true, "Signing up...");
     try {
-      await api("/api/auth/signup", {
-        method: "POST",
-        body: JSON.stringify({ email: emailEl.value.trim(), username: usernameEl.value.trim(), phone: normalizedPhone, password: passwordEl.value })
-      });
-      alert("Signup successful. Please login.");
-      if (switchAuthEl) switchAuthEl.click();
-    } catch (error) {
-      if (error.message && error.message.toLowerCase().includes("already exists")) {
-        const message = String(error.message).toLowerCase();
-        if (message.includes("email")) setFieldError("email", "Email is already registered.");
-        if (message.includes("username")) setFieldError("username", "Username is already taken.");
-        if (message.includes("phone")) setFieldError("phone", "Phone number is already registered.");
+      await resetFormErrors();
+      if (!validateSignupForm()) {
         updateSignupSubmitState();
         return;
       }
-      alert(error.message || "Signup failed");
+      const normalizedPhone = phoneEl.value.replace(/\s+/g, "");
+      if (!validatePhoneValue(normalizedPhone)) {
+        setFieldError("phone", "Include country code, e.g. +15551234567.");
+        updateSignupSubmitState();
+        return;
+      }
+      const available = await validateSignupAvailability();
+      if (!available) {
+        updateSignupSubmitState();
+        return;
+      }
+      try {
+        await api("/api/auth/signup", {
+          method: "POST",
+          body: JSON.stringify({ email: emailEl.value.trim(), username: usernameEl.value.trim(), phone: normalizedPhone, password: passwordEl.value })
+        });
+        alert("Signup successful. Please login.");
+        if (switchAuthEl) switchAuthEl.click();
+      } catch (error) {
+        if (error.message && error.message.toLowerCase().includes("already exists")) {
+          const message = String(error.message).toLowerCase();
+          if (message.includes("email")) setFieldError("email", "Email is already registered.");
+          if (message.includes("username")) setFieldError("username", "Username is already taken.");
+          if (message.includes("phone")) setFieldError("phone", "Phone number is already registered.");
+          updateSignupSubmitState();
+          return;
+        }
+        alert(error.message || "Signup failed");
+      }
+    } finally {
+      setButtonLoading(submitButton, false);
     }
   };
 }
@@ -554,11 +733,14 @@ if (signupFormEl) {
 if (loginFormEl) {
   loginFormEl.onsubmit = async (event) => {
     event.preventDefault();
-    const loginValue = loginUserEl ? loginUserEl.value.trim() : "";
-    if (!loginValue || !loginPassEl || !loginPassEl.value) {
-      return alert("Enter your email/username and password.");
-    }
+    const submitButton = buttonFromEvent(event, loginFormEl);
+    setButtonLoading(submitButton, true, "Logging in...");
     try {
+      const loginValue = loginUserEl ? loginUserEl.value.trim() : "";
+      if (!loginValue || !loginPassEl || !loginPassEl.value) {
+        alert("Enter your email/username and password.");
+        return;
+      }
       const response = await api("/api/auth/login", {
         method: "POST",
         body: JSON.stringify({ login: loginValue, password: loginPassEl.value })
@@ -570,10 +752,11 @@ if (loginFormEl) {
       redirectToDashboard();
     } catch (error) {
       alert(error.message || "Email/Username or Password is not valid");
+    } finally {
+      setButtonLoading(submitButton, false);
     }
   };
 }
-
 const forgotButton = $("forgot");
 if (forgotButton && resetModalEl) {
   forgotButton.onclick = () => {
@@ -584,7 +767,7 @@ if (forgotButton && resetModalEl) {
 
 const saveResetButton = $("saveReset");
 if (saveResetButton) {
-  saveResetButton.onclick = async () => {
+  saveResetButton.onclick = async () => withButtonLoading(saveResetButton, async () => {
     clearFieldErrors(resetErrors);
     if (!resetLoginEl || !resetLoginEl.value.trim()) {
       setFieldError("login", "Enter your email or username.");
@@ -612,9 +795,8 @@ if (saveResetButton) {
     } catch (error) {
       setFieldError("login", error.message || "Password reset failed");
     }
-  };
+  }, "Updating...");
 }
-
 async function loadDashboard() {
   if (!userDevicesEl || !userFilesEl) return redirectToDashboard();
   const response = await api("/api/user/devices");
@@ -640,7 +822,7 @@ async function loadDashboard() {
     del.textContent = "Delete";
     del.onclick = async (e) => {
       e.stopPropagation();
-      if (!confirm(`Delete device ${device.name}? This cannot be undone.`)) return;
+      if (!(await showAppConfirm(`Delete device ${device.name}? This cannot be undone.`))) return;
       try { await api(`/api/user/devices/${encodeURIComponent(device.id)}`, { method: "DELETE" }); selected = null; await loadDashboard(); } catch (err) { alert(err.message || err); }
     };
     controls.appendChild(selectBtn);
@@ -708,7 +890,7 @@ function renderFiles(files = []) {
   clear.type = "button";
   clear.className = "danger";
   clear.textContent = "Clear All";
-  clear.onclick = () => clearUserExportedFiles().catch((error) => alert(error.message || "Clear failed"));
+  clear.onclick = () => withButtonLoading(clear, () => clearUserExportedFiles().catch((error) => alert(error.message || "Clear failed")), "Clearing...");
   actions.appendChild(clear);
   userFilesEl.insertBefore(actions, list);
   visibleFiles.slice().sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0)).forEach((file) => {
@@ -719,14 +901,14 @@ function renderFiles(files = []) {
     const button = document.createElement("button");
     button.type = "button";
     button.textContent = "View / Download";
-    button.onclick = () => openUserStoredFile(file).catch((error) => alert(error.message || "File open failed"));
+    button.onclick = () => withButtonLoading(button, () => openUserStoredFile(file).catch((error) => alert(error.message || "File open failed")), "Opening...");
     row.appendChild(button);
     list.appendChild(row);
   });
 }
 
 async function clearUserExportedFiles() {
-  if (!confirm("Clear all exported files in this section? This deletes them from the backend too.")) return;
+  if (!(await showAppConfirm("Clear all exported files in this section? This deletes them from the backend too."))) return;
   const query = selected ? `?deviceId=${encodeURIComponent(selected.id)}` : "";
   await api(`/api/user/files${query}`, { method: "DELETE" });
   await loadDashboard();
@@ -801,7 +983,7 @@ function renderUserDeviceInfoModal(device) {
     "Phone Numbers": details.phoneNumbers,
     "Last 5 Call Logs": details.lastCallLogs,
     "Updated At": details.updatedAt || details.collectedAt,
-    "Factory Reset Blocked In Settings": device.operation && device.operation.factoryResetBlockedInSettings ? "Yes" : "No � requires Device Owner",
+    "Factory Reset Blocked In Settings": device.operation && device.operation.factoryResetBlockedInSettings ? "Yes" : "No - requires Device Owner",
     "Recovery Mode Factory Reset": "Cannot be guaranteed blocked by a normal APK; requires OEM/enterprise FRP support"
   };
   userDeviceInfoContentEl.innerHTML = `<div class="info-grid">${Object.entries(rows).map(([key, value]) => `<div class="info-row"><b>${escapeHtml(key)}</b><span>${userInfoValueHtml(value)}</span></div>`).join("")}</div>`;
@@ -907,7 +1089,7 @@ function renderUserFileList(files, container = userFilesEl) {
     const button = document.createElement("button");
     button.type = "button";
     button.textContent = file.directory ? "Open" : "Export";
-    button.onclick = () => runUserFileCommand(file.directory ? "file.list" : "file.pull", file.path || "/sdcard");
+    button.onclick = () => withButtonLoading(button, () => runUserFileCommand(file.directory ? "file.list" : "file.pull", file.path || "/sdcard"), file.directory ? "Opening..." : "Exporting...");
     row.appendChild(button);
     container.appendChild(row);
   });
@@ -1144,7 +1326,7 @@ function renderUserRecordings() {
     clear.type = "button";
     clear.className = "danger";
     clear.textContent = "Clear All";
-    clear.onclick = () => clearUserRecordings().catch((error) => alert(error.message || "Clear failed"));
+    clear.onclick = () => withButtonLoading(clear, () => clearUserRecordings().catch((error) => alert(error.message || "Clear failed")), "Clearing...");
     actions.appendChild(clear);
     userRecordingsEl.appendChild(actions);
   }
@@ -1164,12 +1346,12 @@ function renderUserRecordings() {
     const download = document.createElement("button");
     download.type = "button";
     download.textContent = "Download";
-    download.onclick = () => downloadUserRecording(recording.id).catch((error) => alert(error.message));
+    download.onclick = () => withButtonLoading(download, () => downloadUserRecording(recording.id).catch((error) => alert(error.message)), "Downloading...");
     const del = document.createElement("button");
     del.type = "button";
     del.className = "danger";
     del.textContent = "Delete";
-    del.onclick = () => deleteUserRecording(recording.id).catch((error) => alert(error.message));
+    del.onclick = () => withButtonLoading(del, () => deleteUserRecording(recording.id).catch((error) => alert(error.message)), "Deleting...");
     controls.appendChild(view);
     controls.appendChild(download);
     controls.appendChild(del);
@@ -1180,7 +1362,7 @@ function renderUserRecordings() {
 
 
 async function clearUserRecordings() {
-  if (!confirm("Clear all saved recordings? This deletes them from the backend too.")) return;
+  if (!(await showAppConfirm("Clear all saved recordings? This deletes them from the backend too."))) return;
   await api("/api/recordings", { method: "DELETE" });
   activeUserRecordingId = "";
   localStorage.removeItem("cpUserActiveRecordingId");
@@ -1337,7 +1519,7 @@ async function downloadUserRecording(recordingId) {
 }
 
 async function deleteUserRecording(recordingId) {
-  if (!confirm("Delete this recording permanently?")) return;
+  if (!(await showAppConfirm("Delete this recording permanently?"))) return;
   await api(`/api/recordings/${encodeURIComponent(recordingId)}`, { method: "DELETE" });
   if (activeUserRecordingId === recordingId) {
     activeUserRecordingId = "";
@@ -1666,9 +1848,9 @@ function openLive(mode = "screen") {
   setUserLiveLoading(true, "Connecting live stream...");
   tryUserWebRtcLive(mode, () => startUserJpegLive(mode)).catch(() => startUserJpegLive(mode));
 }
-if (userStartRecordingEl) userStartRecordingEl.onclick = () => startUserRecording().catch((error) => alert(error.message));
-if (userStopRecordingEl) userStopRecordingEl.onclick = () => stopUserRecording().catch((error) => alert(error.message));
-if (userSaveRecordingEl) userSaveRecordingEl.onclick = () => saveUserRecording().catch((error) => alert(error.message));
+if (userStartRecordingEl) userStartRecordingEl.onclick = () => withButtonLoading(userStartRecordingEl, () => startUserRecording().catch((error) => alert(error.message)), "Starting...");
+if (userStopRecordingEl) userStopRecordingEl.onclick = () => withButtonLoading(userStopRecordingEl, () => stopUserRecording().catch((error) => alert(error.message)), "Stopping...");
+if (userSaveRecordingEl) userSaveRecordingEl.onclick = () => withButtonLoading(userSaveRecordingEl, () => saveUserRecording().catch((error) => alert(error.message)), "Saving...");
 
 // allow tapping the live frame to send remote touch events (user-initiated)
 if (userFrameEl) {
@@ -1703,22 +1885,25 @@ function openCheckout(plan, provider) {
 }
 
 if (confirmPaymentEl) {
-  confirmPaymentEl.onclick = async () => {
+  confirmPaymentEl.onclick = async () => withButtonLoading(confirmPaymentEl, async () => {
     const paymentId = `pay_${crypto.randomUUID()}`;
     const response = await api("/api/payments/init", {
       method: "POST",
       body: JSON.stringify({ plan: checkoutPlan, provider: paymentMethodEl.value, paymentId })
     });
     if (checkoutStatusEl) checkoutStatusEl.textContent = response.checkout.reason || "Payment initialized. Redirect URL will appear here when provider keys are configured.";
-  };
+  }, "Preparing...");
 }
+if (userChatToggleEl) userChatToggleEl.onclick = openUserChat;
+if (userChatCloseEl) userChatCloseEl.onclick = closeUserChat;
+if (userChatFormEl) userChatFormEl.addEventListener("submit", (event) => withButtonLoading(buttonFromEvent(event, userChatFormEl), () => sendUserChatMessage(event).catch((error) => alert(error.message || "Message failed")), "Sending..."));
 
 if (checkoutBackEl) checkoutBackEl.onclick = () => show("subscriptions");
 if (homeEl) homeEl.onclick = () => { show("dashboard"); refreshEnrollmentHandoff(); };
-if (enrollUserEl) enrollUserEl.addEventListener("click", () => enrollUserDevice().catch((error) => {
+if (enrollUserEl) enrollUserEl.addEventListener("click", () => withButtonLoading(enrollUserEl, () => enrollUserDevice().catch((error) => {
   if (enrollHelpEl) enrollHelpEl.textContent = error.message || "Enrollment failed";
   else alert(error.message || "Enrollment failed");
-}));
+}), "Preparing..."));
 if (openAgentUserEl) openAgentUserEl.addEventListener("click", openInstalledAgent);
 
 document.querySelectorAll("[data-plan]").forEach((button) => {
@@ -1774,5 +1959,5 @@ document.querySelectorAll("[data-toggle-password]").forEach((button) => {
 });
 
 if (userRefreshDeviceInfoEl) {
-  userRefreshDeviceInfoEl.addEventListener("click", () => refreshUserDeviceInfo().catch((error) => alert(error.message || error)));
+  userRefreshDeviceInfoEl.addEventListener("click", () => withButtonLoading(userRefreshDeviceInfoEl, () => refreshUserDeviceInfo().catch((error) => alert(error.message || error)), "Refreshing..."));
 }
