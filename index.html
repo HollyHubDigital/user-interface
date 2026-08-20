@@ -185,7 +185,7 @@
     </dialog>
 
     <div id="userChatWidget" class="grant-chat-widget hidden" aria-live="polite">
-      <button id="userChatToggle" class="grant-chat-button" type="button" aria-label="Open support chat">Chat</button>
+      <button id="userChatToggle" class="grant-chat-button" type="button" aria-label="Open support chat"><img src="chat-icon.png" alt="" /></button>
       <section id="userChatModal" class="grant-chat-modal hidden" aria-label="Admin support chat">
         <header class="grant-chat-header">
           <div>
@@ -204,7 +204,19 @@
       </section>
     </div>
 
+
+    <div id="userTranslateWidget" class="translate-widget hidden" aria-label="Translate page">
+      <button id="translateToggle" class="translate-button" type="button" aria-label="Translate page"><img src="google-translate.png" alt="" /></button>
+      <div id="translateTray" class="translate-tray hidden">
+        <label for="translateLanguage">Translate page</label>
+        <select id="translateLanguage">
+          <option value="">Original language</option>
+        </select>
+      </div>
+      <div id="googleTranslateElement" aria-hidden="true"></div>
+    </div>
     <script src="config.js"></script>
     <script src="user.js"></script>
+    <script src="https://translate.google.com/translate_a/element.js?cb=initGoogleTranslate"></script>
   </body>
 </html>
