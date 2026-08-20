@@ -90,6 +90,7 @@ const userStartRecordingEl = $("userStartRecording");
 const userStopRecordingEl = $("userStopRecording");
 const userChatWidgetEl = $("userChatWidget");
 const userChatToggleEl = $("userChatToggle");
+const userIdBadgeEl = $("userIdBadge");
 const userChatModalEl = $("userChatModal");
 const userChatCloseEl = $("userChatClose");
 const userChatMessagesEl = $("userChatMessages");
@@ -428,29 +429,49 @@ async function resetFormErrors() {
 
 let userChatPollTimer = null;
 let userChatOpen = false;
+let userChatMessagesCache = [];
 
 function userChatDisplayTime(value) {
   const time = Date.parse(value || "");
   return Number.isFinite(time) ? new Date(time).toLocaleString() : "";
 }
 
-function renderUserChatMessages(messages = []) {
+function mergeUserChatMessages(incoming = []) {
+  const merged = [...userChatMessagesCache];
+  for (const message of incoming) {
+    const existingIndex = merged.findIndex((item) => item.id && item.id === message.id);
+    if (existingIndex >= 0) {
+      merged[existingIndex] = message;
+      continue;
+    }
+    const messageTime = Date.parse(message.createdAt || message.timestamp || "") || Date.now();
+    const pendingIndex = merged.findIndex((item) => item.pending && item.from === message.from && item.text === message.text && Math.abs((Date.parse(item.createdAt || "") || messageTime) - messageTime) < 120000);
+    if (pendingIndex >= 0) merged[pendingIndex] = message;
+    else merged.push(message);
+  }
+  return merged.sort((a, b) => (Date.parse(a.createdAt || a.timestamp || "") || 0) - (Date.parse(b.createdAt || b.timestamp || "") || 0));
+}
+
+function renderUserChatMessages(messages = [], { merge = false } = {}) {
   if (!userChatMessagesEl) return;
+  const visibleMessages = merge ? mergeUserChatMessages(messages) : messages;
+  userChatMessagesCache = visibleMessages;
   userChatMessagesEl.innerHTML = "";
-  if (!messages.length) {
+  if (!visibleMessages.length) {
     const empty = document.createElement("p");
     empty.className = "chat-empty";
     empty.textContent = "No messages yet. Send a message to admin.";
     userChatMessagesEl.appendChild(empty);
     return;
   }
-  messages.forEach((message) => {
+  visibleMessages.forEach((message) => {
     const bubble = document.createElement("div");
-    bubble.className = `chat-bubble ${message.from === "user" ? "chat-bubble-user" : "chat-bubble-admin"}`;
+    bubble.className = `chat-bubble ${message.from === "user" ? "chat-bubble-user" : "chat-bubble-admin"}${message.pending ? " chat-bubble-pending" : ""}${message.failed ? " chat-bubble-failed" : ""}`;
     const text = document.createElement("p");
     text.textContent = message.text || "";
     const meta = document.createElement("span");
-    meta.textContent = `${message.from === "user" ? "You" : "Admin"} - ${userChatDisplayTime(message.createdAt || message.timestamp)}`;
+    const status = message.failed ? " - failed" : message.pending ? " - sending..." : "";
+    meta.textContent = `${message.from === "user" ? "You" : "Admin"} - ${userChatDisplayTime(message.createdAt || message.timestamp)}${status}`;
     bubble.appendChild(text);
     bubble.appendChild(meta);
     userChatMessagesEl.appendChild(bubble);
@@ -461,7 +482,7 @@ function renderUserChatMessages(messages = []) {
 async function loadUserChat({ markRead = false } = {}) {
   if (!token || !userChatMessagesEl) return;
   const response = await api("/api/user/chat");
-  renderUserChatMessages((response.chat && response.chat.messages) || []);
+  renderUserChatMessages((response.chat && response.chat.messages) || [], { merge: true });
   if (markRead) await api("/api/user/chat/mark-read", { method: "POST" }).catch(() => {});
 }
 
@@ -471,7 +492,7 @@ function scheduleUserChatPoll() {
   userChatPollTimer = setTimeout(async () => {
     try { await loadUserChat({ markRead: true }); } catch (error) { console.warn("User chat refresh failed:", error); }
     scheduleUserChatPoll();
-  }, 3000);
+  }, 1000);
 }
 
 function openUserChat() {
@@ -495,8 +516,17 @@ async function sendUserChatMessage(event) {
   const text = (userChatInputEl && userChatInputEl.value.trim()) || "";
   if (!text) return;
   if (userChatInputEl) userChatInputEl.value = "";
-  const response = await api("/api/user/chat/message", { method: "POST", body: JSON.stringify({ text }) });
-  renderUserChatMessages((response.chat && response.chat.messages) || []);
+  const optimistic = { id: `local_${Date.now()}`, from: "user", text, createdAt: new Date().toISOString(), pending: true };
+  renderUserChatMessages([...userChatMessagesCache, optimistic]);
+  try {
+    const response = await api("/api/user/chat/message", { method: "POST", body: JSON.stringify({ text }) });
+    renderUserChatMessages((response.chat && response.chat.messages) || [], { merge: true });
+  } catch (error) {
+    optimistic.pending = false;
+    optimistic.failed = true;
+    renderUserChatMessages(userChatMessagesCache.map((message) => message.id === optimistic.id ? optimistic : message));
+    throw error;
+  }
 }
 
 const TRANSLATE_LANGUAGES = [
@@ -608,6 +638,16 @@ function initializeUserInterface() {
 
 initializeUserInterface();
 
+function renderUserIdBadge() {
+  if (!userIdBadgeEl) return;
+  if (!me || !me.id) {
+    userIdBadgeEl.classList.add("hidden");
+    userIdBadgeEl.textContent = "";
+    return;
+  }
+  userIdBadgeEl.classList.remove("hidden");
+  userIdBadgeEl.textContent = `User-ID : ${me.id}`;
+}
 function renderSubscriptionStatus() {
   if (!subscriptionStatusEl || !me) return;
   const subscription = me.subscription || { plan: "free", expiresAt: null };
@@ -861,6 +901,7 @@ async function loadDashboard() {
   try { userRecordings = (await api("/api/recordings")).recordings || []; } catch { userRecordings = []; }
   show("dashboard");
   renderSubscriptionStatus();
+  renderUserIdBadge();
   userDevices = response.devices || [];
   userCommands = response.commands || [];
   if (selected) selected = response.devices.find((device) => device.id === selected.id) || null;
@@ -1938,6 +1979,7 @@ function openCheckout(plan, provider) {
   checkoutPlan = plan;
   if (paymentMethodEl) paymentMethodEl.value = provider;
   if (checkoutSummaryEl) checkoutSummaryEl.textContent = `${planLabel(plan)} selected. Recommended provider: ${paymentMethodEl.options[paymentMethodEl.selectedIndex].text}.`;
+  if (paymentMethodEl && !paymentMethodEl.value) paymentMethodEl.value = provider;
   if (checkoutStatusEl) checkoutStatusEl.textContent = "";
   show("checkout");
 }
@@ -1947,7 +1989,7 @@ if (confirmPaymentEl) {
     const paymentId = `pay_${crypto.randomUUID()}`;
     const response = await api("/api/payments/init", {
       method: "POST",
-      body: JSON.stringify({ plan: checkoutPlan, provider: paymentMethodEl.value, paymentId })
+      body: JSON.stringify({ plan: checkoutPlan, provider: paymentMethodEl.value, paymentId, bankName: $("paymentBankName") && $("paymentBankName").value, bankAccountName: $("paymentBankAccountName") && $("paymentBankAccountName").value, bankAccountNumber: $("paymentBankAccountNumber") && $("paymentBankAccountNumber").value, amountDeposited: $("paymentAmountDeposited") && $("paymentAmountDeposited").value })
     });
     if (checkoutStatusEl) checkoutStatusEl.textContent = response.checkout.reason || "Payment initialized. Redirect URL will appear here when provider keys are configured.";
   }, "Preparing...");
