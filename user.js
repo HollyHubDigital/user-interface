@@ -38,12 +38,13 @@ let activeUserRecordingId = localStorage.getItem("cpUserActiveRecordingId") || "
 let activeUserFileBrowserCommandId = "";
 
 const APP_CONFIG = window.CP_DEVICE_CONFIG || {};
-const API_BASE = (APP_CONFIG.API_BASE_URL || window.location.origin).replace(/\/$/, "");
-const LIVE_BASE = (APP_CONFIG.LIVE_BASE_URL || API_BASE || window.location.origin).replace(/\/$/, "");
+const API_BASE = (APP_CONFIG.API_BASE_URL || "").replace(/\/$/, "");
+const LIVE_BASE = (APP_CONFIG.LIVE_BASE_URL || API_BASE).replace(/\/$/, "");
 const $ = (id) => document.getElementById(id);
-const apiUrl = (path) => `${API_BASE}${path}`;
-const liveApiUrl = (path) => `${LIVE_BASE}${path}`;
-const liveWsUrl = (path) => `${LIVE_BASE.replace("https://", "wss://").replace("http://", "ws://")}${path}`;
+function requireApiBase() { if (!API_BASE) throw new Error("Backend API URL is not configured. Set API_BASE_URL in the Vercel project environment and redeploy."); return API_BASE; }
+const apiUrl = (path) => `${requireApiBase()}${path}`;
+const liveApiUrl = (path) => `${LIVE_BASE || requireApiBase()}${path}`;
+const liveWsUrl = (path) => `${(LIVE_BASE || requireApiBase()).replace("https://", "wss://").replace("http://", "ws://")}${path}`;
 const persistentLiveConfigured = () => LIVE_BASE !== window.location.origin && !LIVE_BASE.includes("vercel.app");
 
 const signupFormEl = $("signupForm");
