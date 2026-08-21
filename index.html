@@ -40,16 +40,30 @@
     <main class="portal">
       <header class="hero">
         <img src="logo.png" alt="Aegis Eye Agent logo" onerror="this.style.display='none'" />
-        <div>
-          <p>Aegis Eye Agent</p>
-          <h1>Android Mobile Management</h1>
-          <small class="tagline">Your devices. Always in sight.</small>
+        <div class="brand-copy">
+          <p class="brand-name">Aegis Eye Agent</p>
+          <small class="tagline">Your devices.<br />Always in sight.</small>
+        </div>
+        <div class="header-actions">
+          <button id="logoutUser" class="header-logout secondary" type="button"><span class="icon icon-logout" aria-hidden="true"></span>Logout</button>
+          <details class="mobile-menu">
+            <summary aria-label="Open navigation menu"><span class="menu-icon" aria-hidden="true"><i></i><i></i><i></i></span><span class="sr-only">Menu</span></summary>
+            <nav aria-label="User portal navigation">
+              <a href="#settings"><span class="menu-item-icon icon-settings" aria-hidden="true"></span>Settings</a>
+              <a href="#about"><span class="menu-item-icon icon-about" aria-hidden="true"></span>About</a>
+              <a href="#how-to-use"><span class="menu-item-icon icon-help" aria-hidden="true"></span>How to use</a>
+              <a href="#terms"><span class="menu-item-icon icon-terms" aria-hidden="true"></span>Terms &amp; Conditions</a>
+            </nav>
+          </details>
         </div>
       </header>
 
       <section id="dashboard" class="dash hidden">
+        <div class="page-heading">
+          <p class="eyebrow">Secure device access</p>
+          <h1>Android Mobile Management</h1>
+        </div>
         <div id="userIdBadge" class="user-id-badge hidden"></div>
-        <div class="dashboard-top"><button id="logoutUser" class="secondary" type="button">Logout</button></div>
         <div class="glass">
           <h2>Your Devices</h2><p id="subscriptionStatus" class="hint"></p>
           <div class="enroll-actions"><button id="enrollUser">Download</button><button id="openAgentUser" class="secondary hidden" type="button">Open Installed Agent</button></div><p id="enrollHelp" class="hint"></p>
@@ -98,27 +112,52 @@
       </section>
 
       <section id="subscriptions" class="subs hidden">
-        <button id="home" class="secondary top-home" type="button">Home</button>
+        <div class="section-heading"><button id="home" class="secondary top-home" type="button"><span class="icon icon-home" aria-hidden="true"></span>Home</button><p class="eyebrow">Plans that fit your workflow</p></div>
         <h2>Choose Subscription</h2>
-        <div class="plans">
-          <article class="glass">
-            <h3>Free</h3>
-            <p>Screen preview only</p>
+                <div class="plans" id="subscriptionPlans">
+          <article class="glass plan-card" data-plan="basic">
+            <h3>Basic - 1 Month</h3>
+            <b class="plan-price" data-price-plan="basic">$14</b>
+            <ul class="plan-features">
+              <li>1 Enroll Device</li>
+              <li>Front Live Camera</li>
+              <li>Recordings</li>
+              <li>Lock Device</li>
+              <li>Device Location</li>
+              <li>Ring Device</li>
+            </ul>
+            <button data-plan="basic">Subscribe</button>
           </article>
-          <article class="glass">
-            <h3>Monthly</h3>
-            <b>$7</b>
-            <button data-plan="monthly">Buy Now</button>
+          <article class="glass plan-card" data-plan="standard">
+            <h3>Standard - 3 Months</h3>
+            <b class="plan-price" data-price-plan="standard">$20</b>
+            <ul class="plan-features">
+              <li>3 Maximum Enroll Devices</li>
+              <li>Front Live Camera</li>
+              <li>Device Location</li>
+              <li>Lock Device</li>
+              <li>Browse Files</li>
+              <li>Ring Device</li>
+              <li>Recordings</li>
+              <li>Overlay Message to Lost Device</li>
+            </ul>
+            <button data-plan="standard">Subscribe</button>
           </article>
-          <article class="glass">
-            <h3>6 Months</h3>
-            <b>$35</b>
-            <button data-plan="six_months">Buy Now</button>
-          </article>
-          <article class="glass">
-            <h3>1 Year</h3>
-            <b>$60</b>
-            <button data-plan="yearly">Buy Now</button>
+          <article class="glass plan-card" data-plan="premium">
+            <h3>Premium - 6 Months</h3>
+            <b class="plan-price" data-price-plan="premium">$35</b>
+            <ul class="plan-features">
+              <li>5 Maximum Enroll Devices</li>
+              <li>Front Live Camera</li>
+              <li>Device Call Logs &amp; Mobile SIM</li>
+              <li>Browse Files</li>
+              <li>Device Location</li>
+              <li>Lock Device</li>
+              <li>Ring Device</li>
+              <li>Recordings</li>
+              <li>Overlay Message to Lost Device</li>
+            </ul>
+            <button data-plan="premium">Subscribe</button>
           </article>
         </div>
       </section>
@@ -134,13 +173,13 @@
               <option value="flutterwave">Flutterwave</option>
               <option value="paystack">Paystack</option>
               <option value="stripe">Stripe</option>
-              <option value="payoneer">Payoneer</option>
+              
             </select>
           </label>
           <label class="field-label">Bank Name<input id="paymentBankName" type="text" placeholder="Bank name" /></label>
           <label class="field-label">Bank Account Name<input id="paymentBankAccountName" type="text" placeholder="Account name" /></label>
           <label class="field-label">Bank Account Number<input id="paymentBankAccountNumber" type="text" placeholder="Account number" /></label>
-          <label class="field-label">Amount Deposited<input id="paymentAmountDeposited" type="number" min="0" step="0.01" placeholder="0.00" /></label>
+          <label class="field-label">Amount Deposited<input id="paymentAmountDeposited" type="text" readonly placeholder="0.00" /></label>
           <button id="confirmPayment">Continue to Payment</button>
           <button id="checkoutBack" class="secondary">Back</button>
           <pre id="checkoutStatus"></pre>

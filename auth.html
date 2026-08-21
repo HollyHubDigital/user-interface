@@ -11,14 +11,28 @@
   <main class="portal">
     <header class="hero">
       <img src="logo.png" alt="Aegis Eye Agent logo" onerror="this.style.display='none'" />
-      <div>
-        <p>Aegis Eye Agent</p>
-        <h1>User Portal Access</h1>
-        <small class="tagline">Your devices. Always in sight.</small>
+      <div class="brand-copy">
+        <p class="brand-name">Aegis Eye Agent</p>
+        <small class="tagline">Your devices.<br />Always in sight.</small>
+      </div>
+      <div class="header-actions">
+        <details class="mobile-menu">
+          <summary aria-label="Open navigation menu"><span class="menu-icon" aria-hidden="true"><i></i><i></i><i></i></span><span class="sr-only">Menu</span></summary>
+          <nav aria-label="User portal navigation">
+            <a href="#settings"><span class="menu-item-icon icon-settings" aria-hidden="true"></span>Settings</a>
+            <a href="#about"><span class="menu-item-icon icon-about" aria-hidden="true"></span>About</a>
+            <a href="#how-to-use"><span class="menu-item-icon icon-help" aria-hidden="true"></span>How to use</a>
+            <a href="#terms"><span class="menu-item-icon icon-terms" aria-hidden="true"></span>Terms &amp; Conditions</a>
+          </nav>
+        </details>
       </div>
     </header>
 
     <section id="auth" class="glass auth">
+      <div class="page-heading">
+        <p class="eyebrow">Secure device access</p>
+        <h1>User Portal Access</h1>
+      </div>
       <button id="switchAuth" class="switch">Signup</button>
       <div id="authMessage" class="auth-message hidden" role="alert"></div>
 
@@ -27,11 +41,17 @@
         <input id="loginUser" placeholder="Email or Username" autocomplete="username" />
         <div class="field-group password-field">
           <input id="loginPass" type="password" placeholder="Password" autocomplete="current-password" />
-          <button type="button" class="toggle-password" data-toggle-password="loginPass" aria-label="Show password"></button>
+          <button type="button" class="toggle-password" data-toggle-password="loginPass" aria-label="Show password"><span class="icon icon-eye" aria-hidden="true"></span></button>
         </div>
         <button>Login</button>
         <a id="forgot">Forgot password?</a>
       </form>
+      <div class="device-visual auth-logo-visual is-login-active" aria-hidden="true">
+        <div class="logo-dragon-stage">
+          <img class="auth-logo" src="logo.png" alt="" />
+          <img class="auth-dragon" src="dragon.gif" alt="" />
+        </div>
+      </div>
 
       <form id="signupForm" class="auth-card">
         <h2>Signup</h2>
@@ -49,7 +69,7 @@
         </div>
         <div class="field-group password-field">
           <input id="password" type="password" placeholder="Password" autocomplete="new-password" />
-          <button type="button" class="toggle-password" data-toggle-password="password" aria-label="Show password"></button>
+          <button type="button" class="toggle-password" data-toggle-password="password" aria-label="Show password"><span class="icon icon-eye" aria-hidden="true"></span></button>
           <div class="field-error" id="passwordError"></div>
         </div>
         <button type="submit">Sign up</button>
@@ -65,17 +85,17 @@
         </div>
         <div class="field-group password-field">
           <input id="currentPassword" type="password" placeholder="Current password" autocomplete="current-password" />
-          <button type="button" class="toggle-password" data-toggle-password="currentPassword" aria-label="Show password"></button>
+          <button type="button" class="toggle-password" data-toggle-password="currentPassword" aria-label="Show password"><span class="icon icon-eye" aria-hidden="true"></span></button>
           <div class="field-error" id="currentPasswordError"></div>
         </div>
         <div class="field-group password-field">
           <input id="newPassword" type="password" placeholder="New Password" autocomplete="new-password" />
-          <button type="button" class="toggle-password" data-toggle-password="newPassword" aria-label="Show password"></button>
+          <button type="button" class="toggle-password" data-toggle-password="newPassword" aria-label="Show password"><span class="icon icon-eye" aria-hidden="true"></span></button>
           <div class="field-error" id="newPasswordError"></div>
         </div>
         <div class="field-group password-field">
           <input id="confirmNewPassword" type="password" placeholder="Confirm New Password" autocomplete="new-password" />
-          <button type="button" class="toggle-password" data-toggle-password="confirmNewPassword" aria-label="Show password"></button>
+          <button type="button" class="toggle-password" data-toggle-password="confirmNewPassword" aria-label="Show password"><span class="icon icon-eye" aria-hidden="true"></span></button>
           <div class="field-error" id="confirmNewPasswordError"></div>
         </div>
         <button id="saveReset" type="button">Save</button>

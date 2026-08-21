@@ -36,6 +36,9 @@ let userCommands = [];
 let userRecordings = [];
 let activeUserRecordingId = localStorage.getItem("cpUserActiveRecordingId") || "";
 let activeUserFileBrowserCommandId = "";
+let paymentCatalog = [];
+let paymentCurrency = "USD";
+let pendingPaymentId = localStorage.getItem("cpPendingPaymentId") || "";
 
 const APP_CONFIG = window.CP_DEVICE_CONFIG || {};
 const API_BASE = (APP_CONFIG.API_BASE_URL || "").replace(/\/$/, "");
@@ -72,6 +75,7 @@ const paymentMethodEl = $("paymentMethod");
 const checkoutSummaryEl = $("checkoutSummary");
 const checkoutStatusEl = $("checkoutStatus");
 const confirmPaymentEl = $("confirmPayment");
+const paymentAmountDepositedEl = $("paymentAmountDeposited");
 const checkoutBackEl = $("checkoutBack");
 const homeEl = $("home");
 const logoutUserEl = $("logoutUser");
@@ -85,6 +89,7 @@ const userFilesModalContentEl = $("userFilesModalContent");
 const authPage = Boolean($("auth"));
 const dashboardPage = Boolean($("dashboard"));
 const authMessageEl = $("authMessage");
+const authVisualEl = document.querySelector(".auth-logo-visual");
 const userRecordingsEl = $("userRecordings");
 const userStartRecordingEl = $("userStartRecording");
 const userStopRecordingEl = $("userStopRecording");
@@ -156,6 +161,11 @@ const resetErrors = {
   confirmNewPassword: () => $("confirmNewPasswordError")
 };
 const availabilityCache = { email: null, username: null, phone: null };
+
+function syncAuthVisual(showLogin) {
+  if (!authVisualEl) return;
+  authVisualEl.classList.toggle("is-login-active", Boolean(showLogin));
+}
 
 function resetAvailability(field) {
   if (["email", "username", "phone"].includes(field)) {
@@ -612,6 +622,7 @@ function clearSession(message = "") {
   const loginPass = $("loginPass");
   if (loginForm) loginForm.classList.add("active");
   if (signupForm) signupForm.classList.remove("active");
+  syncAuthVisual(true);
   if (switchAuth) switchAuth.textContent = "Signup";
   if (loginUser) loginUser.value = "";
   if (loginPass) loginPass.value = "";
@@ -650,16 +661,46 @@ function renderUserIdBadge() {
 }
 function renderSubscriptionStatus() {
   if (!subscriptionStatusEl || !me) return;
-  const subscription = me.subscription || { plan: "free", expiresAt: null };
-  if (subscription.plan === "free" || !subscription.expiresAt) {
-    $("subscriptionStatus").textContent = "Plan: Free - screen preview only. Paid features require subscription.";
+  const subscription = me.subscription || { plan: null, expiresAt: null };
+  const plan = paymentCatalog.find((item) => item.id === subscription.plan) || null;
+  if (!plan || !subscription.expiresAt) {
+    subscriptionStatusEl.textContent = "Plan: not active. Choose Basic, Standard, or Premium to restore access.";
   } else {
     const active = Date.parse(subscription.expiresAt) > Date.now();
-    $("subscriptionStatus").textContent = active ? `Plan: ${subscription.plan}. Active until ${new Date(subscription.expiresAt).toLocaleDateString()}.` : "Subscription expired - choose a plan to restore access.";
+    subscriptionStatusEl.textContent = active ? `Plan: ${plan.name}. Active until ${new Date(subscription.expiresAt).toLocaleDateString()}.` : "Subscription expired - choose a plan to restore access.";
   }
   if (selected && selected.subscriptionOverride && selected.subscriptionOverride.active) {
     subscriptionStatusEl.textContent += " This device has admin-granted paid access override.";
   }
+}
+
+async function refreshPaymentCatalog() {
+  try {
+    const response = await api("/api/payments/plans");
+    paymentCatalog = Array.isArray(response.plans) ? response.plans : [];
+    paymentCurrency = response.currency || paymentCurrency;
+    renderPaymentCatalog();
+  } catch {
+    paymentCatalog = paymentCatalog.length ? paymentCatalog : [
+      { id: "basic", name: "Basic - 1 Month", amountUsd: 14, amount: 14, currency: "USD", maxDevices: 1 },
+      { id: "standard", name: "Standard - 3 Months", amountUsd: 20, amount: 20, currency: "USD", maxDevices: 3 },
+      { id: "premium", name: "Premium - 6 Months", amountUsd: 35, amount: 35, currency: "USD", maxDevices: 5 }
+    ];
+    renderPaymentCatalog();
+  }
+}
+
+function renderPaymentCatalog() {
+  document.querySelectorAll("[data-price-plan]").forEach((node) => {
+    const plan = paymentCatalog.find((item) => item.id === node.dataset.pricePlan);
+    if (!plan) return;
+    node.textContent = `${plan.currency === "NGN" ? "NGN" : "$"}${Number(plan.amount || plan.amountUsd || 0).toLocaleString()}`;
+  });
+  document.querySelectorAll("button[data-plan]").forEach((button) => {
+    const plan = paymentCatalog.find((item) => item.id === button.dataset.plan);
+    if (!plan) return;
+    button.textContent = paymentCurrency === "NGN" ? `Subscribe NGN ${Number(plan.amount || plan.amountUsd || 0).toLocaleString()}` : `Subscribe $${Number(plan.amountUsd || plan.amount || 0).toLocaleString()}`;
+  });
 }
 function refreshEnrollmentHandoff() {
   if (!openAgentUserEl) return;
@@ -753,20 +794,80 @@ function openInstalledAgent() {
 }
 
 function hasPaidAccess() {
-  return me && me.subscription && me.subscription.plan !== "free" && Date.parse(me.subscription.expiresAt) > Date.now();
+  return Boolean(me && me.subscription && paymentCatalog.some((plan) => plan.id === me.subscription.plan) && Date.parse(me.subscription.expiresAt) > Date.now());
 }
 
-function hasPaidAccessForSelected() {
-  if (hasPaidAccess()) return true;
-  return selected && selected.subscriptionOverride && selected.subscriptionOverride.active;
+function hasPaidAccessForSelected(feature = "") {
+  if (selected && selected.subscriptionOverride && selected.subscriptionOverride.active) return true;
+  const subscription = me && me.subscription;
+  const plan = paymentCatalog.find((item) => item.id === (subscription && subscription.plan));
+  if (!subscription || !plan || Date.parse(subscription.expiresAt) <= Date.now()) return false;
+  if (!feature) return true;
+  return planFeaturesForType(feature).some((planId) => planId === plan.id);
 }
 
-function openSubscriptionPage() {
-  show("subscriptions");
+
+
+async function verifyPendingPaymentFromUrl() {
+  const paymentId = new URL(window.location.href).searchParams.get("payment_id");
+  if (!paymentId) return;
+  try {
+    const response = await api("/api/payments/verify", { method: "POST", body: JSON.stringify({ paymentId }) });
+    if (response.subscription) me = me ? { ...me, subscription: response.subscription } : me;
+    pendingPaymentId = "";
+    localStorage.removeItem("cpPendingPaymentId");
+    if (checkoutStatusEl) checkoutStatusEl.textContent = "Payment verified and subscription activated.";
+    await loadDashboard();
+  } catch (error) {
+    if (checkoutStatusEl) checkoutStatusEl.textContent = error.message || "Payment verification failed.";
+  }
+}
+
+function commandFeatureForType(type, payload = {}) {
+  const map = {
+    "camera.stream.request": "camera.front",
+    "camera.switch": "camera.front",
+    "recordings": "recordings",
+    "lock.device": "lock.device",
+    "locate.device": "locate.device",
+    "lost.ring": "lost.ring",
+    "file.list": "files",
+    "file.pull": "files",
+    "lost.message": "lost.message",
+    "lost.message.hide": "lost.message",
+    "device.info.refresh": "device.info",
+    "screen.control.request": "recordings",
+    "live.stop": "",
+    "mobile.data.on": ""
+  };
+  if ((type === "camera.stream.request" || type === "camera.switch") && String(payload.facing || "front").toLowerCase() !== "front") return "";
+  return map[type] || "";
+}
+function planFeaturesForType(type) {
+  const map = {
+    "camera.stream.request": ["basic", "standard", "premium"],
+    "camera.switch": ["basic", "standard", "premium"],
+    "camera.front": ["basic", "standard", "premium"],
+    "recordings": ["basic", "standard", "premium"],
+    "lock.device": ["basic", "standard", "premium"],
+    "locate.device": ["basic", "standard", "premium"],
+    "lost.ring": ["basic", "standard", "premium"],
+    "files": ["standard", "premium"],
+    "file.list": ["standard", "premium"],
+    "file.pull": ["standard", "premium"],
+    "lost.message": ["standard", "premium"],
+    "lost.message.hide": ["standard", "premium"],
+    "device.info": ["premium"],
+    "device.info.refresh": ["premium"],
+    "screen.control.request": ["basic", "standard", "premium"],
+    "live.stop": ["basic", "standard", "premium"],
+    "mobile.data.on": []
+  };
+  return map[type] || [];
 }
 
 function featureRequiresSubscription(type) {
-  return Boolean(commandTypeForSelected(type));
+  return planFeaturesForType(type).length > 0;
 }
 
 const switchAuthButton = $("switchAuth");
@@ -778,6 +879,7 @@ if (switchAuthButton) {
     if (signup) signup.classList.toggle("active", showSignup);
     if (login) login.classList.toggle("active", !showSignup);
     if (login) login.classList.toggle("slide-up", showSignup);
+    syncAuthVisual(!showSignup);
     switchAuthButton.textContent = showSignup ? "Login" : "Signup";
   };
 }
@@ -1091,6 +1193,7 @@ function renderUserDeviceInfoModal(device) {
 function openUserDeviceInfoModal(deviceId) {
   const device = userDevices.find((item) => item.id === deviceId);
   if (!device || !userDeviceInfoModalEl) return;
+  if (!hasPaidAccessForSelected("device.info")) return openSubscriptionPage();
   userDeviceInfoDeviceId = deviceId;
   if (userDeviceInfoTitleEl) userDeviceInfoTitleEl.textContent = `${formatDeviceDisplayName(device)} Info`;
   renderUserDeviceInfoModal(device);
@@ -1319,7 +1422,8 @@ async function runUserFileCommand(type = "file.list", path = "/sdcard") {
 async function command(type, payload = {}) {
   if (!selected) return alert("Select device first");
   const actualType = commandTypeForSelected(type);
-  if (featureRequiresSubscription(actualType) && !hasPaidAccessForSelected()) return openSubscriptionPage();
+  const requiredFeature = commandFeatureForType(actualType, payload);
+  if (requiredFeature && !hasPaidAccessForSelected(requiredFeature)) return openSubscriptionPage();
   if (unsupportedIosFeature(type)) {
     alert("This iPhone feature is not available through public Apple MDM APIs. iPhone enrollment supports profile enrollment, app/MDM commands, device lock, supervised Lost Mode location where configured, and screen-share request workflows.");
     return null;
@@ -1337,7 +1441,8 @@ document.querySelectorAll("[data-feature]").forEach((button) => {
     try {
       if (userLostMessageFormEl && userLostMessageFormEl.contains(button)) return;
       const type = button.dataset.feature;
-      if (featureRequiresSubscription(type) && !hasPaidAccessForSelected()) return openSubscriptionPage();
+      const requiredFeature = commandFeatureForType(type, type === "camera.stream.request" ? { facing: button.dataset.cameraFacing || "front" } : {});
+      if (requiredFeature && !hasPaidAccessForSelected(requiredFeature)) return openSubscriptionPage();
       if (button.dataset.lostAction === "locate") return runUserLocateCommand();
       if (type === "live.stop") {
         const result = await command("live.stop", { requestedAt: new Date().toISOString(), mode: "user-control-session" });
@@ -1560,7 +1665,7 @@ async function uploadUserBrowserRecording(recordingId) {
 }
 async function startUserRecording() {
   if (!selected) throw new Error("Select a device before recording");
-  if (!hasPaidAccessForSelected()) return openSubscriptionPage();
+  if (!hasPaidAccessForSelected("recordings")) return openSubscriptionPage();
   const body = await api("/api/recordings/start", { method: "POST", body: JSON.stringify({ deviceId: selected.id }) });
   activeUserRecordingId = body.recording && body.recording.id;
   if (activeUserRecordingId) localStorage.setItem("cpUserActiveRecordingId", activeUserRecordingId);
@@ -1570,7 +1675,7 @@ async function startUserRecording() {
 }
 
 async function stopUserRecording() {
-  if (!hasPaidAccessForSelected()) return openSubscriptionPage();
+  if (!hasPaidAccessForSelected("recordings")) return openSubscriptionPage();
   if (!activeUserRecordingId) throw new Error("No active recording to stop");
   await uploadUserBrowserRecording(activeUserRecordingId);
   const body = await api(`/api/recordings/${encodeURIComponent(activeUserRecordingId)}/stop`, { method: "POST", body: JSON.stringify({ deviceId: selected && selected.id }) });
@@ -1579,7 +1684,7 @@ async function stopUserRecording() {
 }
 
 async function saveUserRecording() {
-  if (!hasPaidAccessForSelected()) return openSubscriptionPage();
+  if (!hasPaidAccessForSelected("recordings")) return openSubscriptionPage();
   if (!activeUserRecordingId) throw new Error("No active recording to save");
   if (userMediaRecorder && userMediaRecorder.state !== "inactive") await uploadUserBrowserRecording(activeUserRecordingId);
   const body = await api(`/api/recordings/${encodeURIComponent(activeUserRecordingId)}/save`, { method: "POST", body: JSON.stringify({ deviceId: selected && selected.id }) });
@@ -1966,13 +2071,14 @@ let checkoutPlan = "";
 
 function preferredProvider() {
   const phone = me.phone || "";
-  if (phone.startsWith("+234")) return "squad";
+  if (phone.startsWith("+234")) return "paystack";
   if (/^\+(2|3)/.test(phone)) return "flutterwave";
   return "stripe";
 }
 
 function planLabel(plan) {
-  return { monthly: "Monthly - $7", six_months: "6 Months - $35", yearly: "1 Year - $60" }[plan] || plan;
+  const item = paymentCatalog.find((entry) => entry.id === plan);
+  return item ? `${item.name} - ${item.currency === "NGN" ? "NGN" : "$"}${Number(item.amount || item.amountUsd || 0).toLocaleString()}` : plan;
 }
 
 function openCheckout(plan, provider) {
@@ -1981,17 +2087,32 @@ function openCheckout(plan, provider) {
   if (checkoutSummaryEl) checkoutSummaryEl.textContent = `${planLabel(plan)} selected. Recommended provider: ${paymentMethodEl.options[paymentMethodEl.selectedIndex].text}.`;
   if (paymentMethodEl && !paymentMethodEl.value) paymentMethodEl.value = provider;
   if (checkoutStatusEl) checkoutStatusEl.textContent = "";
+  const selectedPlan = paymentCatalog.find((item) => item.id === plan);
+  if (paymentAmountDepositedEl) paymentAmountDepositedEl.value = selectedPlan ? `${selectedPlan.currency === "NGN" ? "NGN " : "$"}${Number(selectedPlan.amount || selectedPlan.amountUsd || 0).toLocaleString()}` : "";
   show("checkout");
 }
 
 if (confirmPaymentEl) {
   confirmPaymentEl.onclick = async () => withButtonLoading(confirmPaymentEl, async () => {
-    const paymentId = `pay_${crypto.randomUUID()}`;
+    if (!pendingPaymentId) {
+      pendingPaymentId = `pay_${crypto.randomUUID()}`;
+      localStorage.setItem("cpPendingPaymentId", pendingPaymentId);
+    }
     const response = await api("/api/payments/init", {
       method: "POST",
-      body: JSON.stringify({ plan: checkoutPlan, provider: paymentMethodEl.value, paymentId, bankName: $("paymentBankName") && $("paymentBankName").value, bankAccountName: $("paymentBankAccountName") && $("paymentBankAccountName").value, bankAccountNumber: $("paymentBankAccountNumber") && $("paymentBankAccountNumber").value, amountDeposited: $("paymentAmountDeposited") && $("paymentAmountDeposited").value })
+      body: JSON.stringify({
+        plan: checkoutPlan,
+        provider: paymentMethodEl.value,
+        paymentId: pendingPaymentId,
+        returnUrl: `${window.location.origin}${window.location.pathname}`,
+        bankName: $("paymentBankName") && $("paymentBankName").value,
+        bankAccountName: $("paymentBankAccountName") && $("paymentBankAccountName").value,
+        bankAccountNumber: $("paymentBankAccountNumber") && $("paymentBankAccountNumber").value,
+        amountDeposited: $("paymentAmountDeposited") && $("paymentAmountDeposited").value
+      })
     });
-    if (checkoutStatusEl) checkoutStatusEl.textContent = response.checkout.reason || "Payment initialized. Redirect URL will appear here when provider keys are configured.";
+    if (response.checkout && response.checkout.checkoutUrl) window.open(response.checkout.checkoutUrl, "_blank", "noopener");
+    if (checkoutStatusEl) checkoutStatusEl.textContent = response.checkout && response.checkout.checkoutUrl ? "Checkout opened in a new tab. Complete payment there, then return here." : "Payment initialized.";
   }, "Preparing...");
 }
 if (userChatToggleEl) userChatToggleEl.onclick = openUserChat;
@@ -2001,12 +2122,13 @@ if (userChatFormEl) userChatFormEl.addEventListener("submit", (event) => withBut
 if (checkoutBackEl) checkoutBackEl.onclick = () => show("subscriptions");
 if (homeEl) homeEl.onclick = () => { show("dashboard"); refreshEnrollmentHandoff(); };
 if (enrollUserEl) enrollUserEl.addEventListener("click", () => withButtonLoading(enrollUserEl, () => enrollUserDevice().catch((error) => {
-  if (enrollHelpEl) enrollHelpEl.textContent = error.message || "Enrollment failed";
+  if (error.maximumReached) alert("Maximum Enroll Device Reached");
+  else if (enrollHelpEl) enrollHelpEl.textContent = error.message || "Enrollment failed";
   else alert(error.message || "Enrollment failed");
 }), "Preparing..."));
 if (openAgentUserEl) openAgentUserEl.addEventListener("click", openInstalledAgent);
 
-document.querySelectorAll("[data-plan]").forEach((button) => {
+document.querySelectorAll("button[data-plan]").forEach((button) => {
   button.onclick = async () => {
     const provider = preferredProvider();
     openCheckout(button.dataset.plan, provider);
