@@ -118,6 +118,7 @@ const userSaveRecordingEl = $("userSaveRecording");
 const userRecordingStatusEl = $("userRecordingStatus");
 const userLostMessageFormEl = $("userLostMessageForm");
 const userLostMessageEl = $("userLostMessage");
+const userLostMessageToggleEl = $("userLostMessageToggle");
 const userDeviceInfoModalEl = $("userDeviceInfoModal");
 const userDeviceInfoTitleEl = $("userDeviceInfoTitle");
 const userDeviceInfoContentEl = $("userDeviceInfoContent");
@@ -831,6 +832,25 @@ function hasPaidAccessForSelected(feature = "") {
   return planFeaturesForType(feature).some((planId) => planId === plan.id);
 }
 
+function ownerMessageStateForDevice(device) {
+  return (device && device.lostMode && device.lostMode.ownerMessage) || {};
+}
+
+function syncUserLostOwnerMessageControls() {
+  const ownerMessage = ownerMessageStateForDevice(selected);
+  const savedMessage = String(ownerMessage.message || "");
+  if (userLostMessageEl) {
+    userLostMessageEl.value = savedMessage;
+    userLostMessageEl.readOnly = Boolean(savedMessage);
+    userLostMessageEl.title = savedMessage ? "Saved owner message. Editing will be added from settings later." : "Enter owner message for this selected device.";
+    userLostMessageEl.placeholder = savedMessage ? "Saved owner message" : "This device is lost. Please contact the owner.";
+  }
+  if (userLostMessageToggleEl) {
+    userLostMessageToggleEl.checked = Boolean(savedMessage) && ownerMessage.enabled !== false && ownerMessage.active !== false;
+    userLostMessageToggleEl.disabled = !selected || !savedMessage || !hasPaidAccessForSelected("lost.message");
+    userLostMessageToggleEl.title = savedMessage ? "Turn the saved owner overlay on or off for this device." : "Show an owner message first before using this toggle.";
+  }
+}
 function openSubscriptionPage() {
   show("subscriptions");
   refreshPaymentCatalog().catch(() => {});
@@ -865,6 +885,7 @@ function commandFeatureForType(type, payload = {}) {
     "file.pull": "files",
     "lost.message": "lost.message",
     "lost.message.hide": "lost.message",
+    "lost.message.toggle": "lost.message",
     "device.info.refresh": "device.info",
     "screen.control.request": "recordings",
     "live.stop": "",
@@ -887,6 +908,7 @@ function planFeaturesForType(type) {
     "file.pull": ["standard", "premium"],
     "lost.message": ["standard", "premium"],
     "lost.message.hide": ["standard", "premium"],
+    "lost.message.toggle": ["standard", "premium"],
     "device.info": ["premium"],
     "device.info.refresh": ["premium"],
     "screen.control.request": ["basic", "standard", "premium"],
@@ -1250,6 +1272,7 @@ function friendlyCommandLabel(type) {
     "lost.message": "Lost Mode message",
     "lost.disable": "Disable lost mode",
     "lost.message.hide": "Hide owner message",
+    "lost.message.toggle": "Owner message overlay toggle",
     "live.stop": "Stop live session",
     "mobile.data.on": "Turn on mobile data",
     "device.info.refresh": "Refresh device info",
@@ -1275,7 +1298,7 @@ function renderCommandResultText(result, command) {
   if (command.type === "file.pull") return "File export requested.";
   if (command.type === "screen.control.request" || command.type === "camera.stream.request") return result.ok ? "Live session started." : "Live session requested.";
   if (command.type === "lock.device") return result.ok ? "Lock command sent." : "Lock command requested.";
-  if (["lost.ring", "lost.message", "lost.message.hide", "lost.disable"].includes(command.type)) return result.output && typeof result.output === "string" ? result.output : "Lost Mode command completed.";
+  if (["lost.ring", "lost.message", "lost.message.hide", "lost.message.toggle", "lost.disable"].includes(command.type)) return result.output && typeof result.output === "string" ? result.output : "Lost Mode command completed.";
   if (command.type === "mobile.data.on") return result.ok ? "Mobile data toggle requested." : "Mobile data request queued.";
   if (result.output && typeof result.output === "string") return result.output;
   if (result.output && typeof result.output === "object") return `Result: ${Object.keys(result.output).join(", ")}`;
@@ -1370,7 +1393,7 @@ function userCommandGateMessage(type) {
   if (selected.platform === "ios") {
     if (!capabilities.appleMdm) return "Install the iPhone MDM profile and complete Apple MDM/APNs enrollment first.";
     if (actualType === "locate.device" && !capabilities.supervised) return "Requires supervised iPhone Lost Mode support.";
-    if (["file.list", "file.pull", "mobile.data.on", "camera.stream.request", "camera.switch", "live.stop", "lost.ring", "lost.message", "lost.message.hide", "lost.disable"].includes(type)) return "Not supported by public Apple MDM APIs.";
+    if (["file.list", "file.pull", "mobile.data.on", "camera.stream.request", "camera.switch", "live.stop", "lost.ring", "lost.message", "lost.message.hide", "lost.message.toggle", "lost.disable"].includes(type)) return "Not supported by public Apple MDM APIs.";
   }
   return "";
 }
@@ -1390,7 +1413,7 @@ function commandTypeForSelected(type) {
 }
 
 function unsupportedIosFeature(type) {
-  return selected && selected.platform === "ios" && ["file.list", "file.pull", "camera.stream.request", "camera.switch", "live.stop", "mobile.data.on", "lost.ring", "lost.message", "lost.message.hide", "lost.disable"].includes(type);
+  return selected && selected.platform === "ios" && ["file.list", "file.pull", "camera.stream.request", "camera.switch", "live.stop", "mobile.data.on", "lost.ring", "lost.message", "lost.message.hide", "lost.message.toggle", "lost.disable"].includes(type);
 }
 
 function livePreviewUnavailable() {
@@ -1475,6 +1498,17 @@ document.querySelectorAll("[data-feature]").forEach((button) => {
       const requiredFeature = commandFeatureForType(type, type === "camera.stream.request" ? { facing: button.dataset.cameraFacing || "front" } : {});
       if (requiredFeature && !hasPaidAccessForSelected(requiredFeature)) return openSubscriptionPage();
       if (button.dataset.lostAction === "locate") return runUserLocateCommand();
+      if (type === "lost.message.toggle") {
+        const message = userLostMessageEl && userLostMessageEl.value.trim() ? userLostMessageEl.value.trim() : "";
+        if (!message) {
+          button.checked = false;
+          return alert("Show and save an owner message before using the overlay toggle.");
+        }
+        const result = await command("lost.message.toggle", { enabled: button.checked, message, requestedAt: new Date().toISOString(), mode: "lost-mode" });
+        if (result) alert(`Owner message overlay ${button.checked ? "enabled" : "disabled"} for ${formatDeviceDisplayName(selected)}.`);
+        setTimeout(() => loadDashboard().catch(() => {}), 1200);
+        return;
+      }
       if (type === "live.stop") {
         const result = await command("live.stop", { requestedAt: new Date().toISOString(), mode: "user-control-session" });
         if (result) stopUserLiveLocal(`Live stop requested for ${formatDeviceDisplayName(selected)}.`);
@@ -1484,11 +1518,11 @@ document.querySelectorAll("[data-feature]").forEach((button) => {
       if (type === "locate.device") return runUserLocateCommand();
       if (type === "file.list") return runUserFileCommand("file.list", "/sdcard");
       const payload = { path: "/sdcard", requestedAt: new Date().toISOString() };
-      if (["lost.ring", "lost.message.hide", "lost.disable"].includes(type)) payload.mode = "lost-mode";
+      if (["lost.ring", "lost.message.hide", "lost.message.toggle", "lost.disable"].includes(type)) payload.mode = "lost-mode";
       if (type === "camera.stream.request") payload.facing = button.dataset.cameraFacing || "front";
       const result = await command(type, payload);
       if (!result) return;
-      if (["lost.ring", "lost.message.hide", "lost.disable", "lock.device"].includes(type)) alert(friendlyCommandLabel(type) + " queued for " + formatDeviceDisplayName(selected) + ".");
+      if (["lost.ring", "lost.message.hide", "lost.message.toggle", "lost.disable", "lock.device"].includes(type)) alert(friendlyCommandLabel(type) + " queued for " + formatDeviceDisplayName(selected) + ".");
       setTimeout(() => loadDashboard().catch(() => {}), 2500);
       if (["screen.control.request", "camera.stream.request"].includes(type) && !livePreviewUnavailable()) openLive(type === "camera.stream.request" ? "camera" : "screen");
       if (type === "screen.control.request" && livePreviewUnavailable()) alert("iPhone screen viewing uses Apple-approved screen-share/MDM workflows. The request was queued; live remote control like Android is not available from a web profile alone.");

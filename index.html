@@ -97,7 +97,13 @@
               <label>Owner Message<textarea id="userLostMessage" maxlength="240" placeholder="This device is lost. Please contact the owner."></textarea></label>
               <button data-feature="lost.message" type="submit">Show Owner Message</button>
             </form>
-            <button data-feature="lost.message.hide" data-lost-action="hide-message" type="button">Hide Owner Message</button>
+            <div class="owner-message-controls">
+              <button data-feature="lost.message.hide" data-lost-action="hide-message" type="button">Hide Owner Message</button>
+              <label class="owner-message-toggle" title="Disable or re-enable the saved owner message on this device">
+                <input id="userLostMessageToggle" type="checkbox" data-feature="lost.message.toggle" data-lost-action="toggle-message" />
+                <span>Overlay On</span>
+              </label>
+            </div>
           </section>
           <div class="record-actions">
             <button id="userStartRecording" class="record-start" title="Start recording" aria-label="Start recording" type="button">Start</button>
