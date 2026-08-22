@@ -1166,6 +1166,98 @@ input, select, textarea {
 .toggle-password { background: #467434 !important; }
 .toggle-password::before, .toggle-password::after { content: none !important; }
 
+/* Desktop dashboard composition: the existing badge stays data-driven and moves visually into the header. */
+@media (min-width: 721px) {
+  .user-id-badge {
+    position: fixed;
+    top: 33px;
+    left: 50%;
+    z-index: 60;
+    width: min(210px, 22vw);
+    min-height: 42px;
+    display: grid;
+    place-items: center;
+    margin: 0;
+    padding: 9px 15px;
+    overflow: hidden;
+    border: 1px solid rgba(255, 255, 255, 0.28);
+    border-radius: 999px;
+    background: #467434;
+    color: #fff;
+    box-shadow: 0 8px 18px rgba(25, 52, 19, .34), inset 0 1px 0 rgba(255,255,255,.24);
+    transform: translateX(-50%);
+    isolation: isolate;
+  }
+
+  .user-id-badge::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    background: url("dragon.gif") center / 76px auto no-repeat;
+    opacity: .42;
+    pointer-events: none;
+  }
+
+  .user-id-badge::after {
+    content: "";
+    position: absolute;
+    inset: 2px;
+    z-index: 1;
+    border: 1px solid rgba(255,255,255,.3);
+    border-radius: inherit;
+    background: rgba(255,255,255,.13);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.25), inset 0 -8px 20px rgba(255,255,255,.05);
+    backdrop-filter: blur(4px);
+    pointer-events: none;
+  }
+
+  .user-id-badge {
+    text-shadow: 0 1px 2px rgba(0,0,0,.45);
+  }
+
+  body::after {
+    content: "";
+    position: fixed;
+    top: 50%;
+    right: 5vw;
+    z-index: 0;
+    width: min(360px, 27vw);
+    aspect-ratio: 1;
+    background: url("globe.png") center / contain no-repeat;
+    opacity: .7;
+    pointer-events: none;
+    transform: translateY(-45%);
+    transform-origin: center;
+    filter: drop-shadow(0 20px 28px rgba(9, 24, 8, .28));
+  }
+
+  body.globe-spin::after {
+    animation: aegisGlobeSpin 8s linear 1;
+  }
+
+  @keyframes aegisGlobeSpin {
+    from { transform: translateY(-45%) rotate(0deg); }
+    to { transform: translateY(-45%) rotate(360deg); }
+  }
+
+  .device-controls {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .device-controls button {
+    margin: 0;
+  }
+
+  #dashboard {
+    position: relative;
+    z-index: 1;
+  }
+}
+
 .actions button::before,
 .lost-mode-actions button::before,
 .lost-message-form button::before,

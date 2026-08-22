@@ -36,6 +36,7 @@ let userCommands = [];
 let userRecordings = [];
 let activeUserRecordingId = localStorage.getItem("cpUserActiveRecordingId") || "";
 let activeUserFileBrowserCommandId = "";
+let globeSpinTimer = null;
 let paymentCatalog = [];
 let paymentCurrency = "USD";
 let pendingPaymentId = localStorage.getItem("cpPendingPaymentId") || "";
@@ -793,6 +794,21 @@ function openInstalledAgent() {
   window.location.href = pendingEnrollmentLink;
 }
 
+function triggerGlobeSpin() {
+  document.body.classList.remove("globe-spin");
+  void document.body.offsetWidth;
+  document.body.classList.add("globe-spin");
+  if (globeSpinTimer) clearTimeout(globeSpinTimer);
+  globeSpinTimer = setTimeout(() => {
+    document.body.classList.remove("globe-spin");
+    globeSpinTimer = null;
+  }, 8000);
+}
+
+function shouldSpinGlobeForButton(button, type) {
+  if (type === "screen.control.request" || type === "camera.stream.request") return true;
+  return type === "lock.device" && !button.dataset.lostAction;
+}
 function hasPaidAccess() {
   return Boolean(me && me.subscription && paymentCatalog.some((plan) => plan.id === me.subscription.plan) && Date.parse(me.subscription.expiresAt) > Date.now());
 }
@@ -1446,6 +1462,7 @@ document.querySelectorAll("[data-feature]").forEach((button) => {
     try {
       if (userLostMessageFormEl && userLostMessageFormEl.contains(button)) return;
       const type = button.dataset.feature;
+      if (shouldSpinGlobeForButton(button, type)) triggerGlobeSpin();
       const requiredFeature = commandFeatureForType(type, type === "camera.stream.request" ? { facing: button.dataset.cameraFacing || "front" } : {});
       if (requiredFeature && !hasPaidAccessForSelected(requiredFeature)) return openSubscriptionPage();
       if (button.dataset.lostAction === "locate") return runUserLocateCommand();
