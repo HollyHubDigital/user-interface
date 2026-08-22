@@ -19,10 +19,10 @@
         <details class="mobile-menu">
           <summary aria-label="Open navigation menu"><span class="menu-icon" aria-hidden="true"><i></i><i></i><i></i></span><span class="sr-only">Menu</span></summary>
           <nav aria-label="User portal navigation">
-            <a href="#settings"><span class="menu-item-icon icon-settings" aria-hidden="true"></span>Settings</a>
-            <a href="#about"><span class="menu-item-icon icon-about" aria-hidden="true"></span>About</a>
-            <a href="#how-to-use"><span class="menu-item-icon icon-help" aria-hidden="true"></span>How to use</a>
-            <a href="#terms"><span class="menu-item-icon icon-terms" aria-hidden="true"></span>Terms &amp; Conditions</a>
+            <a href="settings.html"><span class="menu-item-icon icon-settings" aria-hidden="true"></span>Settings</a>
+            <a href="about.html"><span class="menu-item-icon icon-about" aria-hidden="true"></span>About</a>
+            <a href="how-to-use.html"><span class="menu-item-icon icon-help" aria-hidden="true"></span>How to use</a>
+            <a href="terms.html"><span class="menu-item-icon icon-terms" aria-hidden="true"></span>Terms &amp; Conditions</a>
           </nav>
         </details>
       </div>
@@ -75,6 +75,12 @@
         <button type="submit">Sign up</button>
       </form>
     </section>
+
+    <aside id="signupConsentSheet" class="signup-consent-sheet" aria-label="Terms and Conditions notice" aria-live="polite">
+      <p>Please read the Terms and Conditions before signing up. By using our service, you agree to these Terms and Conditions.</p>
+      <a class="signup-consent-link" href="terms.html">Read Now</a>
+      <button id="closeSignupConsent" class="signup-consent-close" type="button" aria-label="Close Terms and Conditions notice" title="Close notice">&times;</button>
+    </aside>
 
     <dialog id="resetModal">
       <form method="dialog" class="glass modal">

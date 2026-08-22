@@ -91,6 +91,8 @@ const authPage = Boolean($("auth"));
 const dashboardPage = Boolean($("dashboard"));
 const authMessageEl = $("authMessage");
 const authVisualEl = document.querySelector(".auth-logo-visual");
+const signupConsentSheetEl = $("signupConsentSheet");
+const closeSignupConsentEl = $("closeSignupConsent");
 const userRecordingsEl = $("userRecordings");
 const userStartRecordingEl = $("userStartRecording");
 const userStopRecordingEl = $("userStopRecording");
@@ -166,6 +168,13 @@ const availabilityCache = { email: null, username: null, phone: null };
 function syncAuthVisual(showLogin) {
   if (!authVisualEl) return;
   authVisualEl.classList.toggle("is-login-active", Boolean(showLogin));
+  if (signupConsentSheetEl) {
+    signupConsentSheetEl.classList.toggle("is-visible", !showLogin && !signupConsentSheetEl.classList.contains("is-dismissed"));
+  }
+}
+
+if (closeSignupConsentEl && signupConsentSheetEl) {
+  closeSignupConsentEl.onclick = () => signupConsentSheetEl.classList.add("is-dismissed");
 }
 
 function resetAvailability(field) {
