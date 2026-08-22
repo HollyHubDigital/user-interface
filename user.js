@@ -806,6 +806,11 @@ function hasPaidAccessForSelected(feature = "") {
   return planFeaturesForType(feature).some((planId) => planId === plan.id);
 }
 
+function openSubscriptionPage() {
+  show("subscriptions");
+  refreshPaymentCatalog().catch(() => {});
+}
+
 
 
 async function verifyPendingPaymentFromUrl() {
