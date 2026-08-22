@@ -1198,8 +1198,8 @@ input, select, textarea {
     position: fixed;
     top: 33px;
     left: 50%;
-    z-index: 60;
-    width: min(210px, 22vw);
+    z-index: 100;
+    width: min(300px, 30vw);
     min-height: 42px;
     display: grid;
     place-items: center;
@@ -1210,6 +1210,9 @@ input, select, textarea {
     border-radius: 999px;
     background: rgba(70, 116, 52, .78);
     color: #fff;
+    text-align: center;
+    justify-content: center;
+    align-items: center;
     box-shadow: 0 8px 18px rgba(25, 52, 19, .34), inset 0 1px 0 rgba(255,255,255,.24);
     transform: translateX(-50%);
     isolation: isolate;
