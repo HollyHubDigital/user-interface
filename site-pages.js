@@ -294,12 +294,14 @@ async function updateProfileFaceGuide() {
   }
 }
 async function startProfileCamera() {
-  const { video, start, capture, upload, status, guide } = profilePhotoNodes();
+  const { video, canvas, start, capture, upload, status, guide } = profilePhotoNodes();
   if (!video) return;
   stopProfileCamera();
   capturedProfileBlob = null;
   if (upload) upload.disabled = true;
   if (capture) capture.disabled = true;
+  if (canvas) canvas.classList.add("hidden");
+  if (video) video.classList.remove("hidden");
   if (status) status.textContent = "Requesting camera permission...";
   loadProfileFaceModel().catch(() => {});
   profilePhotoStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user", width: { ideal: 960 }, height: { ideal: 960 } }, audio: false });
@@ -311,7 +313,7 @@ async function startProfileCamera() {
   await updateProfileFaceGuide();
 }
 function captureProfilePhoto() {
-  const { video, canvas, upload, status } = profilePhotoNodes();
+  const { video, canvas, start, capture, upload, status, guide } = profilePhotoNodes();
   if (!video || !canvas || !video.videoWidth || !video.videoHeight) return;
   if (upload && upload.disabled && status && !status.className.includes("ok")) return settingsSetStatus("Wait until live face detection says ready before capture.", true);
   const size = Math.min(video.videoWidth, video.videoHeight);
@@ -323,7 +325,15 @@ function captureProfilePhoto() {
   ctx.drawImage(video, sx, sy, size, size, 0, 0, canvas.width, canvas.height);
   canvas.toBlob((blob) => {
     capturedProfileBlob = blob;
-    if (upload) upload.disabled = !blob;
+    if (blob) {
+      canvas.classList.remove("hidden");
+      video.classList.add("hidden");
+      stopProfileCamera();
+      if (start) start.textContent = "Retake Photo";
+      if (capture) capture.disabled = true;
+      if (upload) upload.disabled = false;
+      if (guide) guide.textContent = "Captured preview is frozen. Upload it or retake the photo.";
+    } else if (upload) upload.disabled = true;
     if (status) {
       status.textContent = blob ? "Captured. Upload to save this profile picture." : "Capture failed. Try again.";
       status.className = blob ? "profile-photo-face-status ok" : "profile-photo-face-status warning";
@@ -356,7 +366,7 @@ function initProfilePhotoCapture() {
   dialog.addEventListener("close", stopProfileCamera);
   if (start) start.onclick = () => startProfileCamera().catch((error) => settingsSetStatus(error.message || "Camera failed to start.", true));
   if (capture) capture.onclick = captureProfilePhoto;
-  if (upload) upload.onclick = () => uploadProfilePhoto().catch((error) => { upload.disabled = false; settingsSetStatus(error.message || "Profile photo upload failed.", true); });
+  if (upload) upload.onclick = () => uploadProfilePhoto().catch((error) => { upload.disabled = false; const message = error.message || "Profile photo upload failed."; const { status } = profilePhotoNodes(); if (status) { status.textContent = message; status.className = "profile-photo-face-status warning"; } settingsSetStatus(message, true); });
 }
 function renderSettingsSubscription(user) {
   const host = document.getElementById("settingsSubscription");
@@ -426,5 +436,6 @@ async function loadSettingsProfile() {
   }
 }
 loadSettingsProfile();
+
 
 
