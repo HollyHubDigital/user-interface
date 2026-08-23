@@ -922,6 +922,59 @@ function featureRequiresSubscription(type) {
   return planFeaturesForType(type).length > 0;
 }
 
+function showProfilePhotoRequiredAlert() {
+  showAppAlert("You must setup your profile picture in Settings.", "Profile Picture Required");
+  if (feedbackOkEl) {
+    feedbackOkEl.textContent = "Open Settings";
+    feedbackOkEl.onclick = (event) => {
+      event.preventDefault();
+      if (feedbackDialogEl && feedbackDialogEl.open) feedbackDialogEl.close();
+      window.location.href = "settings.html";
+    };
+  }
+}
+function userHasProfilePhoto() {
+  return Boolean(me && me.profilePhoto && me.profilePhoto.url);
+}
+
+function protectedFeatureForControl(control) {
+  if (!control) return "";
+  if (control.id === "userStartRecording" || control.id === "userStopRecording" || control.id === "userSaveRecording") return "recordings";
+  const type = control.dataset && control.dataset.feature;
+  if (!type) return "";
+  const payload = { facing: control.dataset.cameraFacing || "" };
+  return commandFeatureForType(type, payload) || type;
+}
+
+function requirePaidProfileForControl(control, event) {
+  const feature = protectedFeatureForControl(control);
+  if (!feature || !featureRequiresSubscription(feature)) return true;
+  if (!hasPaidAccessForSelected(feature)) {
+    if (event) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+    }
+    openSubscriptionPage();
+    return false;
+  }
+  if (!userHasProfilePhoto()) {
+    if (event) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+    }
+    showProfilePhotoRequiredAlert();
+    return false;
+  }
+  return true;
+}
+
+document.addEventListener("click", (event) => {
+  if (!dashboardPage || !token) return;
+  const target = event.target;
+  const control = target && target.closest ? target.closest("button[data-feature], input[data-feature], #userStartRecording, #userStopRecording, #userSaveRecording") : null;
+  if (!control) return;
+  requirePaidProfileForControl(control, event);
+}, true);
 const switchAuthButton = $("switchAuth");
 if (switchAuthButton) {
   switchAuthButton.onclick = () => {
@@ -1246,6 +1299,7 @@ function openUserDeviceInfoModal(deviceId) {
   const device = userDevices.find((item) => item.id === deviceId);
   if (!device || !userDeviceInfoModalEl) return;
   if (!hasPaidAccessForSelected("device.info")) return openSubscriptionPage();
+  if (!userHasProfilePhoto()) return showProfilePhotoRequiredAlert();
   userDeviceInfoDeviceId = deviceId;
   if (userDeviceInfoTitleEl) userDeviceInfoTitleEl.textContent = `${formatDeviceDisplayName(device)} Info`;
   renderUserDeviceInfoModal(device);
@@ -1477,6 +1531,7 @@ async function command(type, payload = {}) {
   const actualType = commandTypeForSelected(type);
   const requiredFeature = commandFeatureForType(actualType, payload);
   if (requiredFeature && !hasPaidAccessForSelected(requiredFeature)) return openSubscriptionPage();
+  if (requiredFeature && featureRequiresSubscription(requiredFeature) && !userHasProfilePhoto()) return showProfilePhotoRequiredAlert();
   if (unsupportedIosFeature(type)) {
     alert("This iPhone feature is not available through public Apple MDM APIs. iPhone enrollment supports profile enrollment, app/MDM commands, device lock, supervised Lost Mode location where configured, and screen-share request workflows.");
     return null;
@@ -1731,6 +1786,7 @@ async function uploadUserBrowserRecording(recordingId) {
 async function startUserRecording() {
   if (!selected) throw new Error("Select a device before recording");
   if (!hasPaidAccessForSelected("recordings")) return openSubscriptionPage();
+  if (!userHasProfilePhoto()) return showProfilePhotoRequiredAlert();
   const body = await api("/api/recordings/start", { method: "POST", body: JSON.stringify({ deviceId: selected.id }) });
   activeUserRecordingId = body.recording && body.recording.id;
   if (activeUserRecordingId) localStorage.setItem("cpUserActiveRecordingId", activeUserRecordingId);
@@ -1741,6 +1797,7 @@ async function startUserRecording() {
 
 async function stopUserRecording() {
   if (!hasPaidAccessForSelected("recordings")) return openSubscriptionPage();
+  if (!userHasProfilePhoto()) return showProfilePhotoRequiredAlert();
   if (!activeUserRecordingId) throw new Error("No active recording to stop");
   await uploadUserBrowserRecording(activeUserRecordingId);
   const body = await api(`/api/recordings/${encodeURIComponent(activeUserRecordingId)}/stop`, { method: "POST", body: JSON.stringify({ deviceId: selected && selected.id }) });
@@ -1750,6 +1807,7 @@ async function stopUserRecording() {
 
 async function saveUserRecording() {
   if (!hasPaidAccessForSelected("recordings")) return openSubscriptionPage();
+  if (!userHasProfilePhoto()) return showProfilePhotoRequiredAlert();
   if (!activeUserRecordingId) throw new Error("No active recording to save");
   if (userMediaRecorder && userMediaRecorder.state !== "inactive") await uploadUserBrowserRecording(activeUserRecordingId);
   const body = await api(`/api/recordings/${encodeURIComponent(activeUserRecordingId)}/save`, { method: "POST", body: JSON.stringify({ deviceId: selected && selected.id }) });
@@ -2248,3 +2306,4 @@ document.querySelectorAll("[data-toggle-password]").forEach((button) => {
 if (userRefreshDeviceInfoEl) {
   userRefreshDeviceInfoEl.addEventListener("click", () => withButtonLoading(userRefreshDeviceInfoEl, () => refreshUserDeviceInfo().catch((error) => alert(error.message || error)), "Refreshing..."));
 }
+
