@@ -82,6 +82,8 @@ let profilePhotoStream = null;
 let profileFaceTimer = null;
 let capturedProfileBlob = null;
 let profileFaceDetector = null;
+let profileFaceModel = null;
+let profileFaceModelPromise = null;
 const settingsToken = () => localStorage.getItem("cpUserToken") || "";
 const settingsConfig = () => window.CP_DEVICE_CONFIG || {};
 function settingsApiBase() {
@@ -205,6 +207,48 @@ function profileFrameBrightness(video, canvas) {
   for (let index = 0; index < data.length; index += 4) total += (data[index] + data[index + 1] + data[index + 2]) / 3;
   return total / (data.length / 4);
 }
+function loadProfileScript(src) {
+  return new Promise((resolve, reject) => {
+    if ([...document.scripts].some((script) => script.src === src)) return resolve();
+    const script = document.createElement("script");
+    script.src = src;
+    script.async = true;
+    script.onload = resolve;
+    script.onerror = () => reject(new Error(`Could not load ${src}`));
+    document.head.appendChild(script);
+  });
+}
+async function loadProfileFaceModel() {
+  if (window.FaceDetector) return { type: "native" };
+  if (profileFaceModel) return { type: "model", model: profileFaceModel };
+  if (!profileFaceModelPromise) {
+    profileFaceModelPromise = (async () => {
+      await loadProfileScript("https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.22.0/dist/tf.min.js");
+      await loadProfileScript("https://cdn.jsdelivr.net/npm/@tensorflow-models/blazeface@0.0.7/dist/blazeface.min.js");
+      if (!window.blazeface) throw new Error("Face model failed to initialize.");
+      profileFaceModel = await window.blazeface.load();
+      return profileFaceModel;
+    })();
+  }
+  return { type: "model", model: await profileFaceModelPromise };
+}
+async function detectProfileFace(video) {
+  if (window.FaceDetector) {
+    profileFaceDetector ||= new FaceDetector({ fastMode: true, maxDetectedFaces: 1 });
+    const faces = await profileFaceDetector.detect(video);
+    const face = faces && faces[0];
+    if (!face) return null;
+    const box = face.boundingBox;
+    return { x: box.x, y: box.y, width: box.width, height: box.height, source: "native" };
+  }
+  const { model } = await loadProfileFaceModel();
+  const predictions = await model.estimateFaces(video, false);
+  const face = predictions && predictions[0];
+  if (!face) return null;
+  const topLeft = face.topLeft || [0, 0];
+  const bottomRight = face.bottomRight || [0, 0];
+  return { x: topLeft[0], y: topLeft[1], width: bottomRight[0] - topLeft[0], height: bottomRight[1] - topLeft[1], source: "model" };
+}
 async function updateProfileFaceGuide() {
   const { video, canvas, capture, status, guide } = profilePhotoNodes();
   if (!video || !canvas || !status) return;
@@ -216,41 +260,38 @@ async function updateProfileFaceGuide() {
     if (capture) capture.disabled = true;
     return;
   }
-  if (window.FaceDetector) {
-    try {
-      profileFaceDetector ||= new FaceDetector({ fastMode: true, maxDetectedFaces: 1 });
-      const faces = await profileFaceDetector.detect(video);
-      const face = faces && faces[0];
-      if (!face) {
-        status.textContent = "No face detected - center your face in the frame.";
-        status.className = "profile-photo-face-status warning";
-        if (capture) capture.disabled = true;
-        return;
-      }
-      const box = face.boundingBox;
-      const centerX = box.x + box.width / 2;
-      const centerY = box.y + box.height / 2;
-      const centered = centerX > video.videoWidth * 0.25 && centerX < video.videoWidth * 0.75 && centerY > video.videoHeight * 0.18 && centerY < video.videoHeight * 0.82;
-      const largeEnough = box.width > video.videoWidth * 0.14 && box.height > video.videoHeight * 0.14;
-      if (!centered || !largeEnough) {
-        status.textContent = "Face found - move closer and keep it centered.";
-        status.className = "profile-photo-face-status warning";
-        if (capture) capture.disabled = true;
-        return;
-      }
-      status.textContent = "Face detected clearly. Ready to capture.";
-      status.className = "profile-photo-face-status ok";
-      if (guide) guide.textContent = "Good lighting and face detected. Capture a real live selfie now.";
-      if (capture) capture.disabled = false;
-      return;
-    } catch (error) {
-      status.textContent = "Face detector unavailable in this browser. Use a clear live selfie.";
+  try {
+    if (!window.FaceDetector && !profileFaceModel) {
+      status.textContent = "Loading secure face detector...";
+      status.className = "profile-photo-face-status neutral";
+      if (capture) capture.disabled = true;
     }
-  } else {
-    status.textContent = "Face detector unavailable in this browser. Use a clear live selfie.";
+    const box = await detectProfileFace(video);
+    if (!box) {
+      status.textContent = "No face detected - center your face in the frame.";
+      status.className = "profile-photo-face-status warning";
+      if (capture) capture.disabled = true;
+      return;
+    }
+    const centerX = box.x + box.width / 2;
+    const centerY = box.y + box.height / 2;
+    const centered = centerX > video.videoWidth * 0.25 && centerX < video.videoWidth * 0.75 && centerY > video.videoHeight * 0.18 && centerY < video.videoHeight * 0.82;
+    const largeEnough = box.width > video.videoWidth * 0.14 && box.height > video.videoHeight * 0.14;
+    if (!centered || !largeEnough) {
+      status.textContent = "Face found - move closer and keep it centered.";
+      status.className = "profile-photo-face-status warning";
+      if (capture) capture.disabled = true;
+      return;
+    }
+    status.textContent = "Live face detected clearly. Ready to capture.";
+    status.className = "profile-photo-face-status ok";
+    if (guide) guide.textContent = "Good lighting and live face detected. Capture your selfie now.";
+    if (capture) capture.disabled = false;
+  } catch (error) {
+    status.textContent = "Face detector could not load. Check internet or try Chrome/Edge, then restart camera.";
+    status.className = "profile-photo-face-status warning";
+    if (capture) capture.disabled = true;
   }
-  status.className = "profile-photo-face-status neutral";
-  if (capture) capture.disabled = false;
 }
 async function startProfileCamera() {
   const { video, start, capture, upload, status, guide } = profilePhotoNodes();
@@ -260,6 +301,7 @@ async function startProfileCamera() {
   if (upload) upload.disabled = true;
   if (capture) capture.disabled = true;
   if (status) status.textContent = "Requesting camera permission...";
+  loadProfileFaceModel().catch(() => {});
   profilePhotoStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user", width: { ideal: 960 }, height: { ideal: 960 } }, audio: false });
   video.srcObject = profilePhotoStream;
   await video.play();
@@ -271,6 +313,7 @@ async function startProfileCamera() {
 function captureProfilePhoto() {
   const { video, canvas, upload, status } = profilePhotoNodes();
   if (!video || !canvas || !video.videoWidth || !video.videoHeight) return;
+  if (upload && upload.disabled && status && !status.className.includes("ok")) return settingsSetStatus("Wait until live face detection says ready before capture.", true);
   const size = Math.min(video.videoWidth, video.videoHeight);
   const sx = (video.videoWidth - size) / 2;
   const sy = (video.videoHeight - size) / 2;
@@ -383,3 +426,5 @@ async function loadSettingsProfile() {
   }
 }
 loadSettingsProfile();
+
+
