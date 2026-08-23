@@ -1927,3 +1927,22 @@ input, select, textarea {
 .settings-status { min-height: 22px; text-align: center; color: #ffd19b; font-weight: 900; }
 .settings-status.error { color: #fecaca; }
 @media (max-width: 760px) { .settings-profile-hero, .settings-grid, .settings-info-grid { grid-template-columns: 1fr; } .settings-avatar { width: 128px; height: 128px; } .settings-owner-head { display: grid; } }
+
+.settings-avatar-photo { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; border-radius: inherit; z-index: 1; }
+.settings-avatar #settingsAvatarInitials { position: relative; z-index: 0; }
+.settings-avatar-camera { z-index: 2; }
+.profile-photo-dialog { border: 0; border-radius: 26px; padding: 0; background: transparent; width: min(92vw, 560px); }
+.profile-photo-dialog::backdrop { background: rgba(0,0,0,.68); backdrop-filter: blur(5px); }
+.profile-photo-card { display: grid; gap: 14px; padding: 18px; border-radius: 26px; background: linear-gradient(145deg, rgba(70,116,52,.96), rgba(122,32,32,.96)); border: 1px solid rgba(255,209,155,.36); color: #fff; box-shadow: 0 28px 70px rgba(0,0,0,.42); }
+.profile-photo-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.profile-photo-head h2 { margin: 0; }
+#profilePhotoClose { width: 42px; height: 42px; min-width: 42px; padding: 0; border-radius: 50%; display: grid; place-items: center; font-size: 1.4rem; line-height: 1; }
+.profile-photo-preview { position: relative; min-height: 320px; border-radius: 22px; overflow: hidden; background: #111; border: 2px solid rgba(255,255,255,.22); display: grid; place-items: center; }
+.profile-photo-preview video { width: 100%; height: 100%; min-height: 320px; object-fit: cover; transform: scaleX(-1); }
+.profile-photo-face-status { position: absolute; left: 14px; right: 14px; bottom: 14px; padding: 10px 12px; border-radius: 14px; background: rgba(0,0,0,.72); color: #fff; text-align: center; font-weight: 900; }
+.profile-photo-face-status.ok { background: rgba(34, 197, 94, .88); }
+.profile-photo-face-status.warning { background: rgba(245, 143, 32, .92); }
+.profile-photo-face-status.neutral { background: rgba(70, 116, 52, .88); }
+.profile-photo-actions { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.profile-photo-actions button { width: 100%; margin: 0; }
+@media (max-width: 560px) { .profile-photo-actions { grid-template-columns: 1fr; } .profile-photo-preview, .profile-photo-preview video { min-height: 260px; } }

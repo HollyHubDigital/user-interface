@@ -50,6 +50,7 @@ window.initGoogleTranslate = function initGoogleTranslate() {
 };
 
 initTranslateWidget();
+initProfilePhotoCapture();
 
 const logoutUser = document.getElementById("logoutUser");
 if (logoutUser) {
@@ -76,6 +77,11 @@ const SETTINGS_PLAN_NAMES = {
   premium: "Premium - 6 Months"
 };
 const SETTINGS_PLAN_DAYS = { basic: 30, standard: 90, premium: 180 };
+let settingsProfilePhotoObjectUrl = "";
+let profilePhotoStream = null;
+let profileFaceTimer = null;
+let capturedProfileBlob = null;
+let profileFaceDetector = null;
 const settingsToken = () => localStorage.getItem("cpUserToken") || "";
 const settingsConfig = () => window.CP_DEVICE_CONFIG || {};
 function settingsApiBase() {
@@ -144,6 +150,170 @@ function renderSettingsProfile(user) {
     settingsAvatarInitials: settingsInitials(name)
   };
   Object.entries(pairs).forEach(([id, value]) => { const node = document.getElementById(id); if (node) node.textContent = value; });
+  loadSettingsProfilePhoto(user).catch(() => {});
+}
+async function loadSettingsProfilePhoto(user) {
+  const img = document.getElementById("settingsAvatarPhoto");
+  const initials = document.getElementById("settingsAvatarInitials");
+  if (!img) return;
+  if (settingsProfilePhotoObjectUrl) {
+    URL.revokeObjectURL(settingsProfilePhotoObjectUrl);
+    settingsProfilePhotoObjectUrl = "";
+  }
+  if (!user || !user.profilePhoto || !user.profilePhoto.url) {
+    img.classList.add("hidden");
+    if (initials) initials.classList.remove("hidden");
+    return;
+  }
+  const response = await fetch(settingsApiUrl("/api/user/profile-photo"), { headers: { Authorization: `Bearer ${settingsToken()}` }, cache: "no-store" });
+  if (!response.ok) throw new Error("Profile photo could not be loaded");
+  const blob = await response.blob();
+  settingsProfilePhotoObjectUrl = URL.createObjectURL(blob);
+  img.src = settingsProfilePhotoObjectUrl;
+  img.classList.remove("hidden");
+  if (initials) initials.classList.add("hidden");
+}
+function profilePhotoNodes() {
+  return {
+    dialog: document.getElementById("profilePhotoDialog"),
+    video: document.getElementById("profilePhotoVideo"),
+    canvas: document.getElementById("profilePhotoCanvas"),
+    start: document.getElementById("profilePhotoStart"),
+    capture: document.getElementById("profilePhotoCapture"),
+    upload: document.getElementById("profilePhotoUpload"),
+    close: document.getElementById("profilePhotoClose"),
+    status: document.getElementById("profilePhotoFaceStatus"),
+    guide: document.getElementById("profilePhotoGuide"),
+    camera: document.getElementById("settingsAvatarCamera")
+  };
+}
+function stopProfileCamera() {
+  if (profileFaceTimer) clearInterval(profileFaceTimer);
+  profileFaceTimer = null;
+  if (profilePhotoStream) profilePhotoStream.getTracks().forEach((track) => track.stop());
+  profilePhotoStream = null;
+}
+function profileFrameBrightness(video, canvas) {
+  if (!video || !canvas || !video.videoWidth || !video.videoHeight) return 0;
+  const size = 32;
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext("2d", { willReadFrequently: true });
+  ctx.drawImage(video, 0, 0, size, size);
+  const data = ctx.getImageData(0, 0, size, size).data;
+  let total = 0;
+  for (let index = 0; index < data.length; index += 4) total += (data[index] + data[index + 1] + data[index + 2]) / 3;
+  return total / (data.length / 4);
+}
+async function updateProfileFaceGuide() {
+  const { video, canvas, capture, status, guide } = profilePhotoNodes();
+  if (!video || !canvas || !status) return;
+  if (!video.videoWidth || !video.videoHeight) return;
+  const brightness = profileFrameBrightness(video, canvas);
+  if (brightness < 55) {
+    status.textContent = "Too dark - move to brighter light.";
+    status.className = "profile-photo-face-status warning";
+    if (capture) capture.disabled = true;
+    return;
+  }
+  if (window.FaceDetector) {
+    try {
+      profileFaceDetector ||= new FaceDetector({ fastMode: true, maxDetectedFaces: 1 });
+      const faces = await profileFaceDetector.detect(video);
+      const face = faces && faces[0];
+      if (!face) {
+        status.textContent = "No face detected - center your face in the frame.";
+        status.className = "profile-photo-face-status warning";
+        if (capture) capture.disabled = true;
+        return;
+      }
+      const box = face.boundingBox;
+      const centerX = box.x + box.width / 2;
+      const centerY = box.y + box.height / 2;
+      const centered = centerX > video.videoWidth * 0.25 && centerX < video.videoWidth * 0.75 && centerY > video.videoHeight * 0.18 && centerY < video.videoHeight * 0.82;
+      const largeEnough = box.width > video.videoWidth * 0.14 && box.height > video.videoHeight * 0.14;
+      if (!centered || !largeEnough) {
+        status.textContent = "Face found - move closer and keep it centered.";
+        status.className = "profile-photo-face-status warning";
+        if (capture) capture.disabled = true;
+        return;
+      }
+      status.textContent = "Face detected clearly. Ready to capture.";
+      status.className = "profile-photo-face-status ok";
+      if (guide) guide.textContent = "Good lighting and face detected. Capture a real live selfie now.";
+      if (capture) capture.disabled = false;
+      return;
+    } catch (error) {
+      status.textContent = "Face detector unavailable in this browser. Use a clear live selfie.";
+    }
+  } else {
+    status.textContent = "Face detector unavailable in this browser. Use a clear live selfie.";
+  }
+  status.className = "profile-photo-face-status neutral";
+  if (capture) capture.disabled = false;
+}
+async function startProfileCamera() {
+  const { video, start, capture, upload, status, guide } = profilePhotoNodes();
+  if (!video) return;
+  stopProfileCamera();
+  capturedProfileBlob = null;
+  if (upload) upload.disabled = true;
+  if (capture) capture.disabled = true;
+  if (status) status.textContent = "Requesting camera permission...";
+  profilePhotoStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user", width: { ideal: 960 }, height: { ideal: 960 } }, audio: false });
+  video.srcObject = profilePhotoStream;
+  await video.play();
+  if (start) start.textContent = "Restart Camera";
+  if (guide) guide.textContent = "Look at the camera. Keep your face centered with good light; avoid masks, screenshots, or another screen.";
+  profileFaceTimer = setInterval(() => updateProfileFaceGuide().catch(() => {}), 900);
+  await updateProfileFaceGuide();
+}
+function captureProfilePhoto() {
+  const { video, canvas, upload, status } = profilePhotoNodes();
+  if (!video || !canvas || !video.videoWidth || !video.videoHeight) return;
+  const size = Math.min(video.videoWidth, video.videoHeight);
+  const sx = (video.videoWidth - size) / 2;
+  const sy = (video.videoHeight - size) / 2;
+  canvas.width = 720;
+  canvas.height = 720;
+  const ctx = canvas.getContext("2d");
+  ctx.drawImage(video, sx, sy, size, size, 0, 0, canvas.width, canvas.height);
+  canvas.toBlob((blob) => {
+    capturedProfileBlob = blob;
+    if (upload) upload.disabled = !blob;
+    if (status) {
+      status.textContent = blob ? "Captured. Upload to save this profile picture." : "Capture failed. Try again.";
+      status.className = blob ? "profile-photo-face-status ok" : "profile-photo-face-status warning";
+    }
+  }, "image/jpeg", 0.88);
+}
+async function uploadProfilePhoto() {
+  const { upload, dialog, status } = profilePhotoNodes();
+  if (!capturedProfileBlob) return settingsSetStatus("Capture a live selfie first.", true);
+  if (upload) upload.disabled = true;
+  if (status) status.textContent = "Uploading securely to backend storage...";
+  const response = await settingsApi("/api/user/profile-photo", { method: "POST", headers: { "Content-Type": capturedProfileBlob.type || "image/jpeg" }, body: capturedProfileBlob });
+  settingsSetStatus("Profile picture saved.");
+  stopProfileCamera();
+  if (dialog && dialog.open) dialog.close();
+  capturedProfileBlob = null;
+  const me = await settingsApi("/api/auth/me");
+  renderSettingsProfile(me.user || {});
+  return response;
+}
+function initProfilePhotoCapture() {
+  const { camera, dialog, close, start, capture, upload } = profilePhotoNodes();
+  if (!camera || !dialog) return;
+  camera.onclick = () => {
+    capturedProfileBlob = null;
+    if (typeof dialog.showModal === "function") dialog.showModal();
+    else dialog.setAttribute("open", "open");
+  };
+  if (close) close.onclick = () => { stopProfileCamera(); if (dialog.open) dialog.close(); else dialog.removeAttribute("open"); };
+  dialog.addEventListener("close", stopProfileCamera);
+  if (start) start.onclick = () => startProfileCamera().catch((error) => settingsSetStatus(error.message || "Camera failed to start.", true));
+  if (capture) capture.onclick = captureProfilePhoto;
+  if (upload) upload.onclick = () => uploadProfilePhoto().catch((error) => { upload.disabled = false; settingsSetStatus(error.message || "Profile photo upload failed.", true); });
 }
 function renderSettingsSubscription(user) {
   const host = document.getElementById("settingsSubscription");
