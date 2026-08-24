@@ -1458,6 +1458,7 @@ function refreshFeatureGates() {
     button.disabled = Boolean(message);
     button.title = message || "Available for selected device";
   });
+  syncUserLostOwnerMessageControls();
 }
 
 function commandTypeForSelected(type) {
@@ -1559,9 +1560,15 @@ document.querySelectorAll("[data-feature]").forEach((button) => {
           button.checked = false;
           return alert("Show and save an owner message before using the overlay toggle.");
         }
-        const result = await command("lost.message.toggle", { enabled: button.checked, message, requestedAt: new Date().toISOString(), mode: "lost-mode" });
-        if (result) alert(`Owner message overlay ${button.checked ? "enabled" : "disabled"} for ${formatDeviceDisplayName(selected)}.`);
-        setTimeout(() => loadDashboard().catch(() => {}), 1200);
+        const enabled = button.checked;
+        const result = await command("lost.message.toggle", { enabled, message, requestedAt: new Date().toISOString(), mode: "lost-mode" });
+        if (selected) {
+          selected.lostMode = selected.lostMode || {};
+          selected.lostMode.ownerMessage = { ...(selected.lostMode.ownerMessage || {}), active: enabled, enabled, hidden: !enabled, message };
+        }
+        syncUserLostOwnerMessageControls();
+        if (result) alert(`Owner message overlay ${enabled ? "enabled" : "disabled"} for ${formatDeviceDisplayName(selected)}.`);
+        await loadDashboard().catch(() => {});
         return;
       }
       if (type === "live.stop") {
