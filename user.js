@@ -57,6 +57,7 @@ const switchAuthEl = $("switchAuth");
 const emailEl = $("email");
 const usernameEl = $("username");
 const phoneEl = $("phone");
+const phoneCountryCodeErrorEl = $("phoneCountryCodeError");
 const passwordEl = $("password");
 const loginUserEl = $("loginUser");
 const loginPassEl = $("loginPass");
@@ -326,6 +327,12 @@ function validatePhoneValue(value) {
   return /^\+[1-9]\d{7,14}$/.test(String(value || "").replace(/\s+/g, ""));
 }
 
+function updatePhoneCountryCodeMessage() {
+  if (!phoneEl || !phoneCountryCodeErrorEl) return;
+  const value = phoneEl.value.trim();
+  phoneCountryCodeErrorEl.textContent = value && !value.startsWith("+") ? "Country code required" : "";
+}
+
 function validateSignupForm() {
   clearFieldErrors(signupErrors);
   let valid = true;
@@ -413,6 +420,7 @@ function attachSignupValidation() {
     input.addEventListener("input", () => {
       resetAvailability(field);
       if (signupErrors[field]) setFieldError(field, "");
+      if (field === "phone") updatePhoneCountryCodeMessage();
       updateSignupSubmitState();
     });
     if (field !== "password") {

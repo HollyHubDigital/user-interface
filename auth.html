@@ -66,6 +66,7 @@
         <div class="field-group">
           <input id="phone" type="tel" inputmode="tel" pattern="^\+[1-9][0-9]{7,14}$" placeholder="Phone e.g. +15551234567" title="Include country code, e.g. +15551234567" required />
           <div class="field-error" id="phoneError"></div>
+          <div class="field-error phone-country-code-error" id="phoneCountryCodeError" aria-live="polite"></div>
         </div>
         <div class="field-group password-field">
           <input id="password" type="password" placeholder="Password" autocomplete="new-password" />
