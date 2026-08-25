@@ -195,6 +195,128 @@ a {
   gap: 16px;
 }
 
+.homepage-loading {
+  display: grid;
+  grid-template-columns: 310px minmax(0, 1fr);
+  gap: 16px;
+  min-height: 520px;
+  padding: 18px;
+  border: 1px solid rgba(255, 255, 255, .22);
+  border-radius: 20px;
+  background: rgba(255, 255, 255, .1);
+  box-shadow: 0 15px 38px rgba(10, 18, 8, .22), inset 0 1px 0 rgba(255, 255, 255, .16);
+}
+
+.homepage-loading > * {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, .14);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, .1);
+}
+
+.homepage-loading > *::after,
+.skeleton-heading span::after,
+.skeleton-title::after,
+.skeleton-line::after,
+.skeleton-preview::after,
+.skeleton-actions::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(105deg, transparent 25%, rgba(255, 255, 255, .2) 50%, transparent 75%);
+  transform: translateX(-100%);
+  animation: skeleton-shimmer 1.7s ease-in-out infinite;
+}
+
+.skeleton-heading {
+  grid-column: 1 / -1;
+  display: grid;
+  align-content: center;
+  gap: 10px;
+  min-height: 72px;
+  padding: 8px 4px;
+  border: 0 !important;
+  background: transparent !important;
+}
+
+.skeleton-heading span,
+.skeleton-title,
+.skeleton-line,
+.skeleton-preview,
+.skeleton-actions {
+  position: relative;
+  display: block;
+  overflow: hidden;
+  background: rgba(255, 255, 255, .2);
+}
+
+.skeleton-heading span:first-child {
+  width: min(280px, 55%);
+  height: 12px;
+  border-radius: 999px;
+}
+
+.skeleton-heading span:last-child {
+  width: min(430px, 80%);
+  height: 28px;
+  border-radius: 8px;
+}
+
+.skeleton-card {
+  display: grid;
+  align-content: start;
+  gap: 14px;
+  padding: 18px;
+}
+
+.skeleton-devices {
+  grid-row: 2 / span 2;
+}
+
+.skeleton-title {
+  width: 42%;
+  height: 18px;
+  border-radius: 6px;
+}
+
+.skeleton-line {
+  width: 100%;
+  height: 44px;
+  border-radius: 12px;
+}
+
+.skeleton-line.short,
+.skeleton-actions.short {
+  width: 68%;
+}
+
+.skeleton-live {
+  min-height: 390px;
+}
+
+.skeleton-preview {
+  width: 100%;
+  min-height: 220px;
+  border-radius: 14px;
+  background: rgba(0, 0, 0, .22);
+}
+
+.skeleton-actions {
+  width: 100%;
+  height: 38px;
+  border-radius: 10px;
+}
+
+.skeleton-lower {
+  grid-column: 1 / -1;
+  min-height: 130px;
+}
+
+@keyframes skeleton-shimmer {
+  to { transform: translateX(100%); }
+}
+
 .cards,
 .actions,
 .plans {
@@ -265,6 +387,26 @@ a {
 
   .user-live {
     min-height: 260px;
+  }
+
+  .homepage-loading {
+    grid-template-columns: 1fr;
+    min-height: 440px;
+  }
+
+  .skeleton-devices,
+  .skeleton-live,
+  .skeleton-lower {
+    grid-column: 1;
+    grid-row: auto;
+  }
+
+  .skeleton-live {
+    min-height: 300px;
+  }
+
+  .skeleton-preview {
+    min-height: 150px;
   }
 }
 
@@ -1981,3 +2123,95 @@ input, select, textarea {
 .profile-photo-actions button { width: 100%; margin: 0; }
 .profile-photo-actions button:not(.secondary) { background: #f58f20; color: #fff; }
 @media (max-width: 560px) { .profile-photo-actions { grid-template-columns: 1fr; } .profile-photo-preview, .profile-photo-preview video { min-height: 260px; } }
+
+.how-to-use-page .user-guide,
+.how-to-use-page .owner-message,
+.how-to-use-page .recording-idle {
+  display: grid;
+  gap: 14px;
+}
+
+.how-to-use-page .user-guide-text,
+.how-to-use-page .guide-text,
+.how-to-use-page .owner-message li,
+.how-to-use-page .recording-idle li,
+.how-to-use-page .user-button-use li {
+  line-height: 1.65;
+}
+
+.how-to-use-page mark {
+  display: inline-block;
+  padding: .18em .5em;
+  border-radius: 7px;
+  background: #f58f20;
+  color: #fff;
+  line-height: 1.35;
+  text-align: center;
+}
+
+.how-to-use-page .guide-screenshot-image,
+.how-to-use-page .owner-message > img,
+.how-to-use-page .recording-idle > img,
+.how-to-use-page .edit-text-image {
+  width: 100%;
+  display: grid;
+  place-items: center;
+}
+
+.how-to-use-page .guide-screenshot-image img,
+.how-to-use-page .owner-message > img,
+.how-to-use-page .recording-idle > img,
+.how-to-use-page .edit-text-image {
+  display: block;
+  width: min(100%, 253px);
+  height: auto;
+  border-radius: 7px;
+  object-fit: contain;
+}
+
+.how-to-use-page .image-3-screenshot {
+  width: min(100%, 500px);
+}
+
+.how-to-use-page .user-button-use ul {
+  display: grid;
+  gap: 18px;
+  margin: 0;
+  padding-left: 1.25rem;
+}
+
+.how-to-use-page .user-button-use li {
+  min-width: 0;
+}
+
+.how-to-use-page .user-button-use li img {
+  display: block;
+  width: min(100%, 356px);
+  height: 44px;
+  margin: 10px 0 0;
+  border-radius: 7px;
+  object-fit: contain;
+  object-position: left center;
+}
+
+.how-to-use-page .button-guides {
+  display: block;
+  width: min(100%, 253px);
+  height: auto;
+  margin: 18px auto 0;
+  border-radius: 7px;
+  object-fit: contain;
+}
+
+@media (max-width: 560px) {
+  .how-to-use-page .user-button-use li img {
+    width: 100%;
+    max-width: 356px;
+  }
+}
+
+@media (max-width: 376px) {
+  .how-to-use-page .user-button-use li img {
+    height: 40px;
+  }
+}

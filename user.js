@@ -124,7 +124,12 @@ const userDeviceInfoModalEl = $("userDeviceInfoModal");
 const userDeviceInfoTitleEl = $("userDeviceInfoTitle");
 const userDeviceInfoContentEl = $("userDeviceInfoContent");
 const userRefreshDeviceInfoEl = $("userRefreshDeviceInfo");
+const homepageLoadingEl = $("homepageLoading");
 let userDeviceInfoDeviceId = "";
+
+function finishHomepageLoading() {
+  if (homepageLoadingEl) homepageLoadingEl.classList.add("hidden");
+}
 
 function redirectToAuth(message) {
   if (message) localStorage.setItem("cpUserAuthMessage", message);
@@ -2298,6 +2303,7 @@ async function initUserApp() {
       return;
     }
     await loadDashboard();
+    finishHomepageLoading();
   }
 }
 
