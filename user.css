@@ -2191,6 +2191,7 @@ input, select, textarea {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
+  min-height: 42px;
 }
 
 .live-heading h2 {
@@ -2201,19 +2202,20 @@ input, select, textarea {
 .live-heading-meta {
   display: flex;
   align-items: center;
-  justify-content: flex-end;
+  justify-content: center;
   gap: 10px;
   margin-left: auto;
+  min-width: 170px;
 }
 
 .live-heading-globe {
   display: inline-block;
-  width: 28px;
-  height: 28px;
-  flex: 0 0 28px;
+  width: 52px;
+  height: 52px;
+  flex: 0 0 52px;
   background: url("globe.png") center / contain no-repeat;
-  opacity: .88;
-  filter: drop-shadow(0 5px 8px rgba(9, 24, 8, .28));
+  opacity: .86;
+  filter: drop-shadow(0 7px 10px rgba(9, 24, 8, .32));
 }
 
 .live-device-status {
@@ -2260,10 +2262,11 @@ input, select, textarea {
 
   .live-heading-meta {
     gap: 8px;
+    min-width: 0;
   }
 
   .live-device-status { padding-inline: 7px; font-size: .7rem; }
-  .live-heading-globe { width: 24px; height: 24px; flex-basis: 24px; }
+  .live-heading-globe { width: 52px; height: 52px; flex-basis: 52px; }
 }
 
 .how-to-use-page .button-guides {
