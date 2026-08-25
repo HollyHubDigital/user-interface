@@ -1832,10 +1832,6 @@ input, select, textarea {
     position: relative;
   }
 
-  body.globe-spin .live-heading-globe {
-    animation: aegisGlobeSpin 8s linear 1;
-  }
-
   .device-controls {
     display: flex;
     align-items: center;
@@ -2216,6 +2212,16 @@ input, select, textarea {
   background: url("globe.png") center / contain no-repeat;
   opacity: .86;
   filter: drop-shadow(0 7px 10px rgba(9, 24, 8, .32));
+  transform-origin: center;
+}
+
+body.globe-spin .live-heading-globe {
+  animation: aegisGlobeSpin 8s linear 1;
+}
+
+@keyframes aegisGlobeSpin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
 }
 
 .live-device-status {
