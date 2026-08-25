@@ -152,11 +152,14 @@ function renderSettingsProfile(user) {
     settingsAvatarInitials: settingsInitials(name)
   };
   Object.entries(pairs).forEach(([id, value]) => { const node = document.getElementById(id); if (node) node.textContent = value; });
+  const camera = document.getElementById("settingsAvatarCamera");
+  if (camera) camera.classList.remove("hidden");
   loadSettingsProfilePhoto(user).catch(() => {});
 }
 async function loadSettingsProfilePhoto(user) {
   const img = document.getElementById("settingsAvatarPhoto");
   const initials = document.getElementById("settingsAvatarInitials");
+  const camera = document.getElementById("settingsAvatarCamera");
   if (!img) return;
   if (settingsProfilePhotoObjectUrl) {
     URL.revokeObjectURL(settingsProfilePhotoObjectUrl);
@@ -165,15 +168,20 @@ async function loadSettingsProfilePhoto(user) {
   if (!user || !user.profilePhoto || !user.profilePhoto.url) {
     img.classList.add("hidden");
     if (initials) initials.classList.remove("hidden");
+    if (camera) camera.classList.remove("hidden");
     return;
   }
   const response = await fetch(settingsApiUrl("/api/user/profile-photo"), { headers: { Authorization: `Bearer ${settingsToken()}` }, cache: "no-store" });
-  if (!response.ok) throw new Error("Profile photo could not be loaded");
+  if (!response.ok) {
+    if (camera) camera.classList.remove("hidden");
+    throw new Error("Profile photo could not be loaded");
+  }
   const blob = await response.blob();
   settingsProfilePhotoObjectUrl = URL.createObjectURL(blob);
   img.src = settingsProfilePhotoObjectUrl;
   img.classList.remove("hidden");
   if (initials) initials.classList.add("hidden");
+  if (camera) camera.classList.add("hidden");
 }
 function profilePhotoNodes() {
   return {
@@ -383,7 +391,7 @@ function renderSettingsDevices(devices) {
     host.innerHTML = '<p class="hint">No enrolled devices yet.</p>';
     return;
   }
-  host.innerHTML = devices.map((device) => `<article class="settings-device-card"><strong>${settingsEscape(settingsDeviceName(device))}</strong><span>${settingsEscape(device.platform || "device")} • ${settingsEscape(device.status || "unknown")}</span><small>${settingsEscape(device.id || "")}</small></article>`).join("");
+  host.innerHTML = devices.map((device) => `<article class="settings-device-card"><strong>${settingsEscape(settingsDeviceName(device))}</strong><span>${settingsEscape(device.platform || "device")} ï¿½ ${settingsEscape(device.status || "unknown")}</span><small>${settingsEscape(device.id || "")}</small></article>`).join("");
 }
 function renderSettingsOwnerMessages(devices) {
   const host = document.getElementById("settingsOwnerMessages");

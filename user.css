@@ -2149,6 +2149,23 @@ input, select, textarea {
   text-align: center;
 }
 
+.warning {
+  display: inline-block;
+  padding: .18em .5em;
+  border-radius: 7px;
+  background: #b91c1c;
+  color: #fff;
+  line-height: 1.35;
+  text-align: left;
+}
+
+.terms-page mark {
+  color: #467434;
+  padding: .18em .5em;
+  border-radius: 7px;
+  background: #fff;
+}
+
 .how-to-use-page .guide-screenshot-image,
 .how-to-use-page .owner-message > img,
 .how-to-use-page .recording-idle > img,
