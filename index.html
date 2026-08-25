@@ -93,7 +93,7 @@
         </div>
 
         <div class="glass live">
-          <h2>Live</h2>
+          <div class="live-heading"><h2>Live</h2><span id="userLiveDeviceStatus" class="live-device-status" aria-live="polite"><span class="status-icon" aria-hidden="true"></span><span class="status-label">No device selected</span></span><span class="live-heading-spacer" aria-hidden="true"></span></div>
           <div id="userLive" class="user-live">
             <img id="userFrame" alt="Live device screen" />
           </div>
@@ -137,6 +137,7 @@
 
         <div id="userFiles" class="glass files"></div>
         <div class="glass files"><h2>Saved Recordings</h2><div id="userRecordings" class="cards"></div></div>
+        <div class="glass files agent-alerts-section"><h2>Agent Alerts</h2><div id="userAgentAlerts" class="agent-alert-list"><p class="hint">Select a device to view agent alerts.</p></div></div>
       </section>
 
       <section id="subscriptions" class="subs hidden">

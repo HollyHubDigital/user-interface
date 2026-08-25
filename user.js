@@ -69,6 +69,8 @@ const confirmNewPasswordEl = $("confirmNewPassword");
 const userDevicesEl = $("userDevices");
 const userFilesEl = $("userFiles");
 const userFrameEl = $("userFrame");
+const userLiveDeviceStatusEl = $("userLiveDeviceStatus");
+const userAgentAlertsEl = $("userAgentAlerts");
 const subscriptionStatusEl = $("subscriptionStatus");
 const enrollUserEl = $("enrollUser");
 const openAgentUserEl = $("openAgentUser");
@@ -1125,6 +1127,8 @@ async function loadDashboard() {
   userDevices = response.devices || [];
   userCommands = response.commands || [];
   if (selected) selected = response.devices.find((device) => device.id === selected.id) || null;
+  renderUserLiveDeviceStatus();
+  renderUserAgentAlerts();
   userDevicesEl.innerHTML = "";
   userDevices.forEach((device) => {
     const card = document.createElement("div");
@@ -1162,6 +1166,28 @@ async function loadDashboard() {
   renderUserRecordings();
   refreshFeatureGates();
   refreshEnrollmentHandoff();
+}
+
+function renderUserLiveDeviceStatus() {
+  if (!userLiveDeviceStatusEl) return;
+  const label = userLiveDeviceStatusEl.querySelector(".status-label");
+  const isOnline = Boolean(selected && String(selected.status || "").toLowerCase() === "online");
+  userLiveDeviceStatusEl.classList.toggle("online", isOnline);
+  userLiveDeviceStatusEl.classList.toggle("offline", Boolean(selected) && !isOnline);
+  if (label) label.textContent = selected ? (isOnline ? "Online" : "Offline") : "No device selected";
+}
+
+function renderUserAgentAlerts() {
+  if (!userAgentAlertsEl) return;
+  const devices = selected ? [selected] : userDevices;
+  const alerts = devices.flatMap((device) => (Array.isArray(device.alerts) ? device.alerts : []).map((message) => ({ device, message }))).filter(({ message }) => String(message || "").trim());
+  userAgentAlertsEl.innerHTML = alerts.length ? "" : '<p class="hint">No agent alerts reported.</p>';
+  alerts.forEach(({ device, message }) => {
+    const item = document.createElement("div");
+    item.className = "agent-alert-item";
+    item.innerHTML = `<span class="agent-alert-device">${escapeHtml(formatDeviceDisplayName(device))}</span><span class="agent-alert-message">${escapeHtml(message)}</span>`;
+    userAgentAlertsEl.appendChild(item);
+  });
 }
 
 
