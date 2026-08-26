@@ -1395,35 +1395,6 @@ input, select, textarea {
     position: relative;
   }
 
-  .live h2 {
-    padding-right: 68px;
-  }
-
-  .live::after {
-    content: "";
-    position: absolute;
-    top: 20px;
-    right: 20px;
-    z-index: 3;
-    width: 52px;
-    height: 52px;
-    background: url("globe.png") center / contain no-repeat;
-    opacity: .86;
-    pointer-events: none;
-    transform: none;
-    transform-origin: center;
-    filter: drop-shadow(0 7px 10px rgba(9, 24, 8, .32));
-  }
-
-  body.globe-spin .live::after {
-    animation: aegisGlobeSpin 8s linear 1;
-  }
-
-  @keyframes aegisGlobeSpin {
-    from { transform: rotate(0deg); }
-    to { transform: rotate(360deg); }
-  }
-
   .device-controls {
     display: flex;
     align-items: center;
@@ -2183,9 +2154,9 @@ input, select, textarea {
 }
 
 .live-heading {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
   align-items: center;
-  justify-content: space-between;
   gap: 12px;
   min-height: 42px;
 }
@@ -2193,16 +2164,17 @@ input, select, textarea {
 .live-heading h2 {
   min-width: 0;
   margin: 0;
+  justify-self: start;
 }
 
 .live-heading-meta {
+  grid-column: 2;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 16px;
-  margin-left: auto;
-  min-width: 210px;
-  padding-inline: 8px;
+  gap: 12px;
+  justify-self: center;
+  min-width: 0;
 }
 
 .live-heading-globe {
