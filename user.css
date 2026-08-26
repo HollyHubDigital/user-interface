@@ -2178,6 +2178,8 @@ input, select, textarea {
 }
 
 .live-heading-globe {
+  grid-column: 3;
+  justify-self: end;
   display: inline-block;
   width: 52px;
   height: 52px;
