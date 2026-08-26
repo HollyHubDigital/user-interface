@@ -10,14 +10,14 @@
 <body class="site-page settings-page">
   <main class="portal">
     <header class="hero">
-      <a href="index.html" aria-label="Aegis Eye Agent home"><img src="logo.png" alt="Aegis Eye Agent logo" onerror="this.style.display='none'" /></a>
+      <a href="index.html" aria-label="Aegis Eye Agent home"><img src="logo.png" alt="Aegis Eye Agent logo" loading="lazy" onerror="this.style.display='none'" /></a>
       <div class="brand-copy"><p class="brand-name">Aegis Eye Agent</p><small class="tagline">Your devices.<br />Always in sight.</small></div>
       <div class="header-actions"><button id="logoutUser" class="header-logout secondary" type="button"><span class="icon icon-logout" aria-hidden="true"></span>Logout</button><details class="mobile-menu"><summary aria-label="Open navigation menu"><span class="menu-icon" aria-hidden="true"><i></i><i></i><i></i></span><span class="sr-only">Menu</span></summary><nav aria-label="User portal navigation"><a href="index.html"><span class="menu-item-icon icon-home" aria-hidden="true"></span>Home</a><a href="settings.html"><span class="menu-item-icon icon-settings" aria-hidden="true"></span>Settings</a><a href="about.html"><span class="menu-item-icon icon-about" aria-hidden="true"></span>About</a><a href="how-to-use.html"><span class="menu-item-icon icon-help" aria-hidden="true"></span>How to use</a><a href="terms.html"><span class="menu-item-icon icon-terms" aria-hidden="true"></span>Terms &amp; Conditions</a><a href="privacy.html"><span class="menu-item-icon icon-terms" aria-hidden="true"></span>Privacy &amp; Policy</a></nav></details></div>
     </header>
 
     <section class="settings-profile-hero glass" aria-label="User profile">
       <div class="settings-avatar-card">
-        <div class="settings-avatar"><img id="settingsAvatarPhoto" class="settings-avatar-photo hidden" alt="Profile photo" /><span id="settingsAvatarInitials">AE</span><button id="settingsAvatarCamera" class="settings-avatar-camera" type="button" title="Add live profile photo" aria-label="Add live profile photo"><span class="camera-icon" aria-hidden="true"></span></button></div>
+        <div class="settings-avatar"><img id="settingsAvatarPhoto" class="settings-avatar-photo hidden" alt="Profile photo" loading="lazy" /><span id="settingsAvatarInitials">AE</span><button id="settingsAvatarCamera" class="settings-avatar-camera" type="button" title="Add live profile photo" aria-label="Add live profile photo"><span class="camera-icon" aria-hidden="true"></span></button></div>
       </div>
       <div class="settings-profile-card">
         <p class="eyebrow">User Profile</p>
@@ -62,7 +62,7 @@
       <div class="profile-photo-actions"><button id="profilePhotoStart" type="button">Start Camera</button><button id="profilePhotoCapture" type="button" disabled>Capture</button><button id="profilePhotoUpload" type="button" class="secondary" disabled>Upload Photo</button></div>
     </form>
   </dialog>
-  <div id="userTranslateWidget" class="translate-widget" aria-label="Translate page"><button id="translateToggle" class="translate-button" type="button" aria-label="Translate page"><img src="google-translate.png" alt="" /></button><div id="translateTray" class="translate-tray hidden"><label for="translateLanguage">Translate page</label><select id="translateLanguage"><option value="">Original language</option></select></div><div id="googleTranslateElement" aria-hidden="true"></div></div>
+  <div id="userTranslateWidget" class="translate-widget" aria-label="Translate page"><button id="translateToggle" class="translate-button" type="button" aria-label="Translate page"><img src="google-translate.png" alt="" loading="lazy" /></button><div id="translateTray" class="translate-tray hidden"><label for="translateLanguage">Translate page</label><select id="translateLanguage"><option value="">Original language</option></select></div><div id="googleTranslateElement" aria-hidden="true"></div></div>
   <script src="config.js"></script><script src="site-pages.js"></script><script src="https://translate.google.com/translate_a/element.js?cb=initGoogleTranslate"></script>
 </body>
 </html>

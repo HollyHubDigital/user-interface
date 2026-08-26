@@ -39,7 +39,7 @@
   <body>
     <main class="portal">
       <header class="hero">
-        <img src="logo.png" alt="Aegis Eye Agent logo" onerror="this.style.display='none'" />
+        <img src="logo.png" alt="Aegis Eye Agent logo" loading="lazy" onerror="this.style.display='none'" />
         <div class="brand-copy">
           <p class="brand-name">Aegis Eye Agent</p>
           <small class="tagline">Your devices.<br />Always in sight.</small>
@@ -101,7 +101,7 @@
             <span class="live-heading-globe" aria-hidden="true"></span>
           </div>
           <div id="userLive" class="user-live">
-            <img id="userFrame" alt="Live device screen" />
+            <img id="userFrame" alt="Live device screen" loading="lazy" />
           </div>
           <div class="actions">
             <button data-feature="screen.control.request">Live Control</button>
@@ -264,7 +264,7 @@
     </dialog>
 
     <div id="userChatWidget" class="grant-chat-widget hidden" aria-live="polite">
-      <button id="userChatToggle" class="grant-chat-button" type="button" aria-label="Open support chat"><img src="chat-icon.png" alt="" /></button>
+      <button id="userChatToggle" class="grant-chat-button" type="button" aria-label="Open support chat"><img src="chat-icon.png" alt="" loading="lazy" /></button>
       <section id="userChatModal" class="grant-chat-modal hidden" aria-label="Admin support chat">
         <header class="grant-chat-header">
           <div>
@@ -285,7 +285,7 @@
 
 
     <div id="userTranslateWidget" class="translate-widget hidden" aria-label="Translate page">
-      <button id="translateToggle" class="translate-button" type="button" aria-label="Translate page"><img src="google-translate.png" alt="" /></button>
+      <button id="translateToggle" class="translate-button" type="button" aria-label="Translate page"><img src="google-translate.png" alt="" loading="lazy" /></button>
       <div id="translateTray" class="translate-tray hidden">
         <label for="translateLanguage">Translate page</label>
         <select id="translateLanguage">
