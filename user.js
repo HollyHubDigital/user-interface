@@ -31,6 +31,8 @@ let userRecordingDrawTimer = null;
 let userRecordingAudioDestination = null;
 let userRecordingStartedAt = 0;
 let pendingEnrollmentLink = localStorage.getItem("cpPendingEnrollmentLink") || "";
+let pendingEnrollmentPlatform = localStorage.getItem("cpPendingEnrollmentPlatform") || "";
+let userEnrollmentAction = "download";
 let userDevices = [];
 let userCommands = [];
 let userRecordings = [];
@@ -67,6 +69,7 @@ const currentPasswordEl = $("currentPassword");
 const newPasswordEl = $("newPassword");
 const confirmNewPasswordEl = $("confirmNewPassword");
 const userDevicesEl = $("userDevices");
+const userDevicePlatformFilterEl = $("userDevicePlatformFilter");
 const userFilesEl = $("userFiles");
 const userFrameEl = $("userFrame");
 const userLiveDeviceStatusEl = $("userLiveDeviceStatus");
@@ -75,6 +78,8 @@ const subscriptionStatusEl = $("subscriptionStatus");
 const enrollUserEl = $("enrollUser");
 const openAgentUserEl = $("openAgentUser");
 const enrollHelpEl = $("enrollHelp");
+const userEnrollmentModalEl = $("userEnrollmentModal");
+const userEnrollmentInstructionsEl = $("userEnrollmentInstructions");
 const paymentMethodEl = $("paymentMethod");
 const checkoutSummaryEl = $("checkoutSummary");
 const checkoutStatusEl = $("checkoutStatus");
@@ -732,17 +737,17 @@ function refreshEnrollmentHandoff() {
   if (!openAgentUserEl) return;
   const hasLink = Boolean(pendingEnrollmentLink);
   openAgentUserEl.classList.toggle("hidden", !hasLink);
-  if (enrollHelpEl) enrollHelpEl.textContent = hasLink ? "After installing the APK, tap Open Installed Agent to auto-fill Device ID and Token." : "Click Enroll / Download to create an enrollment and download the Aegis Eye Agent APK.";
+  if (enrollHelpEl) enrollHelpEl.textContent = hasLink ? `After installing the ${pendingEnrollmentPlatform || "selected"} agent, tap Open Installed Agent to finish enrollment.` : "Click Download to select an enrollment type.";
 }
 
-async function collectUserBrowserDeviceDetails() {
+async function collectUserBrowserDeviceDetails(platform = "android") {
   let userAgentData = null;
   try {
     userAgentData = navigator.userAgentData ? await navigator.userAgentData.getHighEntropyValues(["architecture", "bitness", "model", "platform", "platformVersion", "uaFullVersion"]) : null;
   } catch {
     userAgentData = null;
   }
-  const detectedPlatform = /iphone|ipad|ipod/i.test(navigator.userAgent) ? "ios" : "android";
+  const detectedPlatform = ["android", "ios", "windows", "linux"].includes(platform) ? platform : "android";
   const screenSize = window.screen ? window.screen.width + "x" + window.screen.height : "unknown";
   const serialSource = JSON.stringify({
     userId: me && me.id,
@@ -756,12 +761,12 @@ async function collectUserBrowserDeviceDetails() {
   const serial = Array.from(new Uint8Array(digest)).map((byte) => byte.toString(16).padStart(2, "0")).join("").slice(0, 24).toUpperCase();
   return {
     platform: detectedPlatform,
-    name: (detectedPlatform === "ios" ? "iPhone" : "Android") + " User Device",
+    name: ({ ios: "iPhone", android: "Android", windows: "Windows", linux: "Linux" }[detectedPlatform]) + " User Device",
     serial,
     ownerConsent: true,
     capabilities: {
       browserEnrollment: true,
-      nativeAgentRequired: detectedPlatform === "android",
+      nativeAgentRequired: ["android", "windows", "linux"].includes(detectedPlatform),
       camera: Boolean(navigator.mediaDevices && navigator.mediaDevices.getUserMedia),
       screenControl: false,
       shell: false
@@ -781,27 +786,38 @@ async function collectUserBrowserDeviceDetails() {
   };
 }
 
-function buildUserAgentEnrollmentLink(enrollment) {
+function buildUserAgentEnrollmentLink(enrollment, platform = pendingEnrollmentPlatform || "android") {
   const params = new URLSearchParams({ serverUrl: API_BASE, liveServerUrl: LIVE_BASE, deviceId: enrollment.deviceId, token: enrollment.token });
-  return "cpdevice://enroll?" + params.toString();
+  return `${platform === "android" ? "cpdevice" : "aegis-eye"}://enroll?` + params.toString();
 }
 
-async function enrollUserDevice() {
+function enrollmentDownloadDetails(platform) {
+  return {
+    android: ["/api/enrollment/android-agent", "aegis-eye-agent.apk"],
+    ios: ["/api/enrollment/ios-profile", "aegis-eye-enrollment.mobileconfig"],
+    windows: ["/api/enrollment/windows-agent", "aegis-eye-agent-win-x64.exe"],
+    linux: ["/api/enrollment/linux-agent", "aegis-eye-agent-linux-x64"]
+  }[platform];
+}
+
+async function enrollUserDevice(platform = "android") {
   if (!token) return redirectToAuth("Please login before enrolling a device.");
   if (enrollUserEl) enrollUserEl.disabled = true;
   try {
-    const details = await collectUserBrowserDeviceDetails();
+    pendingEnrollmentPlatform = platform;
+    localStorage.setItem("cpPendingEnrollmentPlatform", platform);
+    const details = await collectUserBrowserDeviceDetails(platform);
     const enrollment = await api("/api/user/enroll-browser", { method: "POST", body: JSON.stringify(details) });
-    pendingEnrollmentLink = buildUserAgentEnrollmentLink(enrollment);
+    pendingEnrollmentLink = buildUserAgentEnrollmentLink(enrollment, platform);
     localStorage.setItem("cpPendingEnrollmentLink", pendingEnrollmentLink);
-    const downloadPath = details.platform === "ios" ? "/api/enrollment/ios-profile" : "/api/enrollment/android-agent";
+    const [downloadPath, downloadName] = enrollmentDownloadDetails(platform);
     const link = document.createElement("a");
     link.href = apiUrl(downloadPath);
-    link.download = details.platform === "ios" ? "aegis-eye-enrollment.mobileconfig" : "aegis-eye-agent.apk";
+    link.download = downloadName;
     document.body.appendChild(link);
     link.click();
     link.remove();
-    if (enrollHelpEl) enrollHelpEl.textContent = details.platform === "ios" ? "Install the downloaded iOS profile, then return here." : "APK download started. After installing it, tap Open Installed Agent to auto-fill enrollment details.";
+    if (enrollHelpEl) enrollHelpEl.textContent = platform === "ios" ? "Install the downloaded iPhone profile, then return here." : `${platform} agent download started. Install it, then tap Open Installed Agent.`;
     refreshEnrollmentHandoff();
     await loadDashboard();
     return enrollment;
@@ -1130,7 +1146,8 @@ async function loadDashboard() {
   renderUserLiveDeviceStatus();
   renderUserAgentAlerts();
   userDevicesEl.innerHTML = "";
-  userDevices.forEach((device) => {
+  const platformFilter = userDevicePlatformFilterEl ? userDevicePlatformFilterEl.value : "all";
+  userDevices.filter((device) => platformFilter === "all" || device.platform === platformFilter).forEach((device) => {
     const card = document.createElement("div");
     card.className = "device-card";
     const subtitle = formatDeviceDisplayVersion(device);
@@ -1167,6 +1184,8 @@ async function loadDashboard() {
   refreshFeatureGates();
   refreshEnrollmentHandoff();
 }
+
+if (userDevicePlatformFilterEl) userDevicePlatformFilterEl.addEventListener("change", () => loadDashboard().catch((error) => { if (enrollHelpEl) enrollHelpEl.textContent = error.message || "Could not refresh devices"; }));
 
 function renderUserLiveDeviceStatus() {
   if (!userLiveDeviceStatusEl) return;
@@ -1488,7 +1507,12 @@ function userCommandGateMessage(type) {
     if (actualType === "locate.device" && !capabilities.supervised) return "Requires supervised iPhone Lost Mode support.";
     if (["file.list", "file.pull", "mobile.data.on", "camera.stream.request", "camera.switch", "live.stop", "lost.ring", "lost.message", "lost.message.hide", "lost.message.toggle", "lost.disable"].includes(type)) return "Not supported by public Apple MDM APIs.";
   }
+  if (["windows", "linux"].includes(selected.platform) && ["screen.control.request", "camera.stream.request", "camera.switch", "lock.device", "lost.ring", "live.stop", "mobile.data.on"].includes(type)) return `This control is not available for the ${selected.platform} agent.`;
   return "";
+}
+
+function userDefaultFilePath() {
+  return selected && ["windows", "linux"].includes(selected.platform) ? "" : "/sdcard";
 }
 
 function refreshFeatureGates() {
@@ -1542,7 +1566,7 @@ async function runUserLocateCommand() {
   else showLocationModal(null, result && result.output ? String(result.output) : "Location is still pending. Keep the agent online and try Locate again if no result appears.");
 }
 
-async function runUserFileCommand(type = "file.list", path = "/sdcard") {
+async function runUserFileCommand(type = "file.list", path = userDefaultFilePath()) {
   if (!selected) return alert("Select device first");
   showUserFilesModal(type === "file.list" ? `Browsing ${path}... waiting for the enrolled agent.` : `Exporting ${path}... waiting for the enrolled agent.`);
   const queued = await command(type, { path, requestedAt: new Date().toISOString() });
@@ -1617,8 +1641,8 @@ document.querySelectorAll("[data-feature]").forEach((button) => {
         return;
       }
       if (type === "locate.device") return runUserLocateCommand();
-      if (type === "file.list") return runUserFileCommand("file.list", "/sdcard");
-      const payload = { path: "/sdcard", requestedAt: new Date().toISOString() };
+      if (type === "file.list") return runUserFileCommand("file.list", userDefaultFilePath());
+      const payload = { path: userDefaultFilePath(), requestedAt: new Date().toISOString() };
       if (["lost.ring", "lost.message.hide", "lost.message.toggle", "lost.disable"].includes(type)) payload.mode = "lost-mode";
       if (type === "camera.stream.request") payload.facing = button.dataset.cameraFacing || "front";
       const result = await command(type, payload);
@@ -2290,12 +2314,28 @@ if (userChatFormEl) userChatFormEl.addEventListener("submit", (event) => withBut
 
 if (checkoutBackEl) checkoutBackEl.onclick = () => show("subscriptions");
 if (homeEl) homeEl.onclick = () => { show("dashboard"); refreshEnrollmentHandoff(); };
-if (enrollUserEl) enrollUserEl.addEventListener("click", () => withButtonLoading(enrollUserEl, () => enrollUserDevice().catch((error) => {
-  if (error.maximumReached) alert("Maximum Enroll Device Reached");
-  else if (enrollHelpEl) enrollHelpEl.textContent = error.message || "Enrollment failed";
-  else alert(error.message || "Enrollment failed");
-}), "Preparing..."));
-if (openAgentUserEl) openAgentUserEl.addEventListener("click", openInstalledAgent);
+if (enrollUserEl) enrollUserEl.addEventListener("click", () => {
+  userEnrollmentAction = "download";
+  if (userEnrollmentInstructionsEl) userEnrollmentInstructionsEl.textContent = "Choose Android, iPhone, Windows, or Linux. Existing dashboard controls will target whichever enrolled device you select.";
+  if (userEnrollmentModalEl && typeof userEnrollmentModalEl.showModal === "function") userEnrollmentModalEl.showModal();
+});
+document.querySelectorAll("[data-user-enrollment-platform]").forEach((button) => {
+  button.addEventListener("click", () => {
+    const platform = button.dataset.userEnrollmentPlatform;
+    if (userEnrollmentModalEl && userEnrollmentModalEl.open) userEnrollmentModalEl.close();
+    if (userEnrollmentAction === "open") return openInstalledAgent();
+    withButtonLoading(enrollUserEl, () => enrollUserDevice(platform).catch((error) => {
+      if (error.maximumReached) alert("Maximum Enroll Device Reached");
+      else if (enrollHelpEl) enrollHelpEl.textContent = error.message || "Enrollment failed";
+      else alert(error.message || "Enrollment failed");
+    }), "Preparing...");
+  });
+});
+if (openAgentUserEl) openAgentUserEl.addEventListener("click", () => {
+  userEnrollmentAction = "open";
+  if (userEnrollmentInstructionsEl) userEnrollmentInstructionsEl.textContent = pendingEnrollmentLink ? `Choose ${pendingEnrollmentPlatform || "the enrolled platform"} to open its installed agent.` : "Download an enrollment first, then choose its platform to open the installed agent.";
+  if (userEnrollmentModalEl && typeof userEnrollmentModalEl.showModal === "function") userEnrollmentModalEl.showModal();
+});
 
 document.querySelectorAll("button[data-plan]").forEach((button) => {
   button.onclick = async () => {

@@ -87,7 +87,7 @@
         </div>
         <div id="userIdBadge" class="user-id-badge hidden"></div>
         <div class="glass">
-          <h2>Your Devices</h2><p id="subscriptionStatus" class="hint"></p>
+          <h2>Your Devices</h2><label class="device-platform-filter">Platform<select id="userDevicePlatformFilter"><option value="all">All platforms</option><option value="android">Android</option><option value="ios">iPhone</option><option value="windows">Windows</option><option value="linux">Linux</option></select></label><p id="subscriptionStatus" class="hint"></p>
           <div class="enroll-actions"><button id="enrollUser">Download</button><button id="openAgentUser" class="secondary hidden" type="button">Open Installed Agent</button></div><p id="enrollHelp" class="hint"></p>
           <div id="userDevices" class="cards"></div>
         </div>
@@ -220,6 +220,20 @@
           <pre id="checkoutStatus"></pre>
         </div>
       </section>    </main>
+
+    <dialog id="userEnrollmentModal" class="result-dialog">
+      <form method="dialog" class="glass modal result-modal">
+        <h2>Select Enrollment Type</h2>
+        <p id="userEnrollmentInstructions">Choose the platform agent or profile you want to enroll.</p>
+        <div class="enrollment-options">
+          <button type="button" data-user-enrollment-platform="android">Android</button>
+          <button type="button" data-user-enrollment-platform="ios">iPhone</button>
+          <button type="button" data-user-enrollment-platform="windows">Windows</button>
+          <button type="button" data-user-enrollment-platform="linux">Linux</button>
+        </div>
+        <div class="modal-actions"><button type="submit" class="secondary">Cancel</button></div>
+      </form>
+    </dialog>
 
     <dialog id="locationModal" class="result-dialog">
       <form method="dialog" class="glass modal result-modal">
