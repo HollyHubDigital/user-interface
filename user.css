@@ -2199,9 +2199,10 @@ input, select, textarea {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 10px;
+  gap: 16px;
   margin-left: auto;
-  min-width: 170px;
+  min-width: 210px;
+  padding-inline: 8px;
 }
 
 .live-heading-globe {
